@@ -96,6 +96,56 @@ function updatePropertiesFile(filePath, updates) {
   fs.writeFileSync(filePath, newLines.join('\r\n'), 'utf8');
 }
 
+
+// ===========================================================================
+// Server Configuration Helpers (Multi-Server Support)
+// ===========================================================================
+const SERVERS_CONFIG_PATH = path.join(__dirname, 'servers.json');
+
+function loadServersConfig() {
+  try {
+    if (fs.existsSync(SERVERS_CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(SERVERS_CONFIG_PATH, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Error loading servers config:', e.message);
+  }
+  return {
+    servers: {
+      default: {
+        name: 'Default Server',
+        rootPath: '..',
+        botDir: '../mc-bot',
+        serverJar: 'server.jar',
+        javaPath: null,
+        rconHost: '127.0.0.1',
+        rconPort: 25575,
+        rconPassword: '',
+        autoStart: false,
+        maxRam: '10G',
+        notes: 'Primary server'
+      }
+    },
+    settings: {
+      defaultServer: 'default',
+      showTerminal: false,
+      closeToTray: true,
+      autoStartDefaultServer: false,
+      autoStartDefaultBot: false
+    }
+  };
+}
+
+function saveServersConfig(config) {
+  try {
+    fs.writeFileSync(SERVERS_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.error('Error saving servers config:', e.message);
+    return false;
+  }
+}
+
 const MANAGER_SETTINGS_PATH = path.join(__dirname, 'manager-settings.json');
 
 function readManagerSettings() {
@@ -749,7 +799,76 @@ ipcMain.handle('read-manager-settings', () => readManagerSettings());
 ipcMain.handle('save-manager-settings', (_, settings) => {
   const ok = saveManagerSettings(settings);
   return { success: ok };
+})
+// ===========================================================================
+// Server Profile Management (Multi-Server Support)
+// ===========================================================================
+
+ipcMain.handle('get-server-profiles', () => {
+  try {
+    const config = loadServersConfig();
+    return { success: true, profiles: config.servers, active: config.settings.defaultServer };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
+
+ipcMain.handle('get-active-server-id', () => {
+  try {
+    const config = loadServersConfig();
+    return { success: true, serverId: config.settings.defaultServer };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('set-active-server', (_, serverId) => {
+  try {
+    const config = loadServersConfig();
+    if (!config.servers[serverId]) {
+      return { success: false, error: 'Server profile not found' };
+    }
+    config.settings.defaultServer = serverId;
+    saveServersConfig(config);
+    return { success: true, serverId };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('add-server-profile', (_, profile) => {
+  try {
+    const config = loadServersConfig();
+    const id = profile.id || Object.keys(config.servers).length + 1;
+    config.servers[id] = { ...profile, id };
+    if (!config.settings.defaultServer) {
+      config.settings.defaultServer = id;
+    }
+    saveServersConfig(config);
+    return { success: true, profile: config.servers[id] };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('remove-server-profile', (_, serverId) => {
+  try {
+    const config = loadServersConfig();
+    if (!config.servers[serverId]) {
+      return { success: false, error: 'Server profile not found' };
+    }
+    delete config.servers[serverId];
+    if (config.settings.defaultServer === serverId) {
+      config.settings.defaultServer = Object.keys(config.servers)[0] || null;
+    }
+    saveServersConfig(config);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+;
 
 // ===========================================================================
 // Fallback Server Detection Methods

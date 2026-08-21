@@ -30,6 +30,21 @@ contextBridge.exposeInMainWorld('api', {
   readManagerSettings:  ()         => ipcRenderer.invoke('read-manager-settings'),
   saveManagerSettings:  (settings) => ipcRenderer.invoke('save-manager-settings', settings),
 
+  // Server profiles
+  getServerProfiles:   ()         => ipcRenderer.invoke('get-server-profiles'),
+  getActiveServerId:   ()         => ipcRenderer.invoke('get-active-server-id'),
+  setActiveServer:     (serverId) => ipcRenderer.invoke('set-active-server', serverId),
+  addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
+  removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
+
+
+  // Server profiles
+  getServerProfiles:   ()         => ipcRenderer.invoke('get-server-profiles'),
+  getActiveServerId:   ()         => ipcRenderer.invoke('get-active-server-id'),
+  setActiveServer:     (serverId) => ipcRenderer.invoke('set-active-server', serverId),
+  addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
+  removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
+
   // Bot command tracking (renderer → main)
   registerBotCommand: (cmd) => ipcRenderer.send('register-bot-command', cmd),
 

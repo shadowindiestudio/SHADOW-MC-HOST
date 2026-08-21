@@ -1,49 +1,63 @@
-# Local secrets and environment files
-**/.env
-**/.env.*
-!**/.env.example
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Node/Electron dependencies and build output
-**/node_modules/
-**/dist/
-**/out/
-**/release/
-**/.electron-gyp/
-**/npm-debug.log*
+# Node.js
+node_modules/
+npm-debug.log*
 
-# Minecraft runtime data
-world*/
-logs/
-crash-reports/
-plugins/
-backups/
-versions/
-cache/
+# Electron
+.dist
+.build
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Logs
 *.log
-**/*.log
-.console_history
-*.pid
-manager/*.pid
-eula.txt
+logs/
+
+# Server data (keep these out of source control)
+world/
+world_nether/
+world_the_end/
+playerdata/
+stats/
+advancements/
+usercache.json
+banned-ips.json
+banned-players.json
 ops.json
 whitelist.json
-usercache.json
-banned-players.json
-banned-ips.json
-permissions.yml
-commands.yml
-server-icon.png
+server.properties
+paper.yml
+spigot.yml
+bukkit.yml
+eula.txt
 
-# Local server/config state
-server.properties.local
-config/local/
-mc-bot/bot.log
-manager/manager-settings.json
+# PID files
+*.pid
 
-# OS/editor files
-attached_assets/
-**/.DS_Store
-**/Thumbs.db
-**/*.lnk
-**/.vscode/
-**/.idea/
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# Crash reports
+crash-reports/
+
+# Cache
+.cache/

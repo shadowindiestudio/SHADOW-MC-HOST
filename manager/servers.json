@@ -1,0 +1,24 @@
+{
+  "servers": {
+    "default": {
+      "name": "Default Server",
+      "rootPath": "..",
+      "botDir": "../mc-bot",
+      "serverJar": "server.jar",
+      "javaPath": null,
+      "rconHost": "127.0.0.1",
+      "rconPort": 25575,
+      "rconPassword": "",
+      "autoStart": false,
+      "maxRam": "10G",
+      "notes": "Primary Minecraft server - configure in server.properties"
+    }
+  },
+  "settings": {
+    "defaultServer": "default",
+    "showTerminal": false,
+    "closeToTray": true,
+    "autoStartDefaultServer": false,
+    "autoStartDefaultBot": false
+  }
+}
