@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shadow MC Host</title>
+  <!-- Google Fonts: Inter and JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="app-title">☠ SHADOW MC HOST</h1>
+      </div>
+      
+      <nav class="nav-menu">
+        <button class="nav-btn active" data-panel="dashboard">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-btn" data-panel="console">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 12H4v-2h8v2zm8-4H4V8h16v4z"/></svg>
+          Console
+        </button>
+        <button class="nav-btn" data-panel="players">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          Players
+        </button>
+        <button class="nav-btn" data-panel="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          Settings
+        </button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="status-item">
+          <span class="status-dot offline" id="server-sidebar-dot"></span>
+          <span class="status-label">Server</span>
+        </div>
+        <div class="status-item">
+          <span class="status-dot offline" id="bot-sidebar-dot"></span>
+          <span class="status-label">Discord Bot</span>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- RIGHT MAIN CONTENT -->
+    <main class="main-content">
+      
+      <!-- DASHBOARD PANEL -->
+      <section class="panel active" id="dashboard-panel">
+        <div class="panel-header">
+          <h2>Dashboard</h2>
+          <span class="timestamp-live" id="dashboard-clock">2026-05-23 15:44</span>
+        </div>
+        
+        <div class="dashboard-grid">
+          <!-- SERVER CARD -->
+          <div class="card process-card" id="server-card">
+            <div class="card-header">
+              <h3>Minecraft Server</h3>
+              <div class="status-badge offline" id="server-status-badge">Offline</div>
+            </div>
+            
+            <div class="card-body">
+              <div class="metric-row">
+                <span class="metric-label">RAM Usage:</span>
+                <span class="metric-value" id="server-ram-value">0 MB / 10240 MB</span>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar" id="server-ram-bar" style="width: 0%"></div>
+              </div>
+              
+              <div class="metric-row">
+                <span class="metric-label">Uptime:</span>
+                <span class="metric-value uptime-num" id="server-uptime-val">00:00:00</span>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button class="btn btn-primary" id="btn-start-server">Start</button>
+              <button class="btn btn-danger" id="btn-stop-server" disabled>Stop</button>
+              <button class="btn" id="btn-restart-server" disabled>Restart</button>
+            </div>
+          </div>
+          
+          <!-- BOT CARD -->
+          <div class="card process-card" id="bot-card">
+            <div class="card-header">
+              <h3>Discord Bot</h3>
+              <div class="status-badge offline" id="bot-status-badge">Offline</div>
+            </div>
+            
+            <div class="card-body">
+              <div class="metric-row">
+                <span class="metric-label">RAM Usage:</span>
+                <span class="metric-value" id="bot-ram-value">0 MB</span>
+              </div>
+              <div class="metric-row space-top">
+                <span class="metric-label">Last Command:</span>
+                <span class="metric-value command-badge" id="bot-last-command">None</span>
+              </div>
+            </div>
+            
+            <div class="card-actions">
+              <button class="btn btn-primary" id="btn-start-bot">Start</button>
+              <button class="btn btn-danger" id="btn-stop-bot" disabled>Stop</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- WIDGETS ROW -->
+        <div class="widgets-row">
+          <div class="card widget-card">
+            <h4>Online Players</h4>
+            <div class="widget-large-val tabular-nums" id="widget-player-count">0/10</div>
+            <div class="progress-bar-container">
+              <div class="progress-bar" id="widget-player-bar" style="width: 0%"></div>
+            </div>
+          </div>
+          <div class="card widget-card">
+            <h4>Ticks Per Second (TPS)</h4>
+            <div class="widget-large-val tabular-nums" id="widget-tps-val">--.--</div>
+            <span class="tps-sub" id="widget-tps-status">Server Offline</span>
+          </div>
+        </div>
+        
+        <!-- MINI CONSOLE PREVIEW -->
+        <div class="card mini-console-card">
+          <div class="card-header">
+            <h4>Live Console Preview (Last 8 lines)</h4>
+            <button class="btn btn-sm" id="btn-go-to-console">View Full Console</button>
+          </div>
+          <div class="mini-console-body console-output-box" id="mini-console-output">
+            <div class="console-line system-line">[System] Click 'Start' to launch the server.</div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- CONSOLE PANEL -->
+      <section class="panel" id="console-panel">
+        <div class="panel-header space-between">
+          <h2>Console</h2>
+          <div class="console-header-actions">
+            <div class="toggle-tabs">
+              <button class="tab-btn active" id="tab-server-console">Server Console</button>
+              <button class="tab-btn" id="tab-bot-console">Discord Bot Console</button>
+            </div>
+            <button class="btn btn-sm flat-btn" id="btn-copy-console">COPY</button>
+          </div>
+        </div>
+        
+        <div class="console-container">
+          <div class="console-main-box console-output-box" id="full-console-output">
+            <!-- Populated dynamically -->
+          </div>
+          
+          <div class="console-input-bar">
+            <input type="text" id="console-input-field" placeholder="Enter server command (e.g. op sarad, list) or prefix /say..." autocomplete="off">
+            <button class="btn" id="btn-send-console-cmd">Send</button>
+          </div>
+        </div>
+      </section>
+      
+      <!-- PLAYERS PANEL -->
+      <section class="panel" id="players-panel">
+        <div class="panel-header space-between">
+          <h2>Players</h2>
+          <span class="players-total-count" id="players-count-badge">0 Players Online</span>
+        </div>
+        
+        <!-- Players empty state -->
+        <div class="empty-state" id="players-empty-state">
+          <div class="empty-icon">☠</div>
+          <h3>No players currently exploring the shadow realm</h3>
+          <p>Players will appear here once they connect to the server.</p>
+        </div>
+        
+        <!-- Players grid -->
+        <div class="players-grid" id="players-list-grid" style="display: none;">
+          <!-- Dynamically populated card structure:
+          <div class="player-card">
+            <div class="player-avatar">S</div>
+            <div class="player-info">
+              <span class="player-name">sarad</span>
+              <span class="badge badge-op">OP</span>
+            </div>
+            <div class="player-actions">
+              <button class="btn btn-sm btn-danger">Kick</button>
+              <button class="btn btn-sm">Deop</button>
+            </div>
+          </div>
+          -->
+        </div>
+      </section>
+      
+      <!-- SETTINGS PANEL -->
+      <section class="panel" id="settings-panel">
+        <div class="panel-header">
+          <h2>Settings</h2>
+        </div>
+        
+        <form class="settings-form" id="settings-form-el">
+          <div class="settings-grid">
+            <div class="settings-section">
+              <h3>Server Configuration</h3>
+              <div class="form-group">
+                <label for="set-max-players">Max Players</label>
+                <input type="number" id="set-max-players" min="1" max="999" placeholder="10">
+              </div>
+              <div class="form-group">
+                <label for="set-view-dist">View Distance (chunks)</label>
+                <input type="number" id="set-view-dist" min="2" max="32" placeholder="10">
+              </div>
+              <div class="form-group">
+                <label for="set-sim-dist">Simulation Distance (chunks)</label>
+                <input type="number" id="set-sim-dist" min="2" max="32" placeholder="10">
+              </div>
+              <div class="form-group">
+                <label for="set-motd">Message of the Day (MOTD)</label>
+                <textarea id="set-motd" rows="3" placeholder="Server description..."></textarea>
+              </div>
+            </div>
+            
+            <div class="settings-section">
+              <h3>Credentials & Resources</h3>
+              <div class="form-group">
+                <label for="set-rcon-pass">RCON Password</label>
+                <input type="text" id="set-rcon-pass" placeholder="Strong password...">
+              </div>
+              <div class="form-group">
+                <label for="set-discord-token">Discord Bot Token</label>
+                <div class="password-input-container">
+                  <input type="password" id="set-discord-token" placeholder="Token string...">
+                  <button type="button" class="btn btn-sm" id="btn-toggle-token-mask">Show</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="set-max-ram">Allocated Server RAM (Xmx/Xms)</label>
+                <input type="text" id="set-max-ram" placeholder="e.g. 10G or 4096M">
+                <small class="form-note">Must be specified as e.g. 10G or 8192M. Updates start.bat directly.</small>
+              </div>
+            </div>
+          </div>
+          
+          <div class="settings-section settings-section-full">
+            <h3>App Behaviour</h3>
+            <div class="toggle-list">
+
+              <div class="toggle-row">
+                <div class="toggle-row-label">
+                  <span class="toggle-title">Show Terminal Windows</span>
+                  <span class="toggle-desc">When ON, server/bot launch with a visible CMD window. Applies on next start.</span>
+                </div>
+                <label class="toggle-switch" for="set-show-terminal">
+                  <input type="checkbox" id="set-show-terminal">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div class="toggle-row-label">
+                  <span class="toggle-title">Minimize to System Tray on Close</span>
+                  <span class="toggle-desc">Clicking X hides the window to the tray instead of quitting. Right-click tray icon to quit.</span>
+                </div>
+                <label class="toggle-switch" for="set-close-to-tray">
+                  <input type="checkbox" id="set-close-to-tray">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div class="toggle-row-label">
+                  <span class="toggle-title">Auto-Start Server on Launch</span>
+                  <span class="toggle-desc">Automatically starts the Minecraft server when the manager opens.</span>
+                </div>
+                <label class="toggle-switch" for="set-auto-start-server">
+                  <input type="checkbox" id="set-auto-start-server">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div class="toggle-row">
+                <div class="toggle-row-label">
+                  <span class="toggle-title">Auto-Start Bot on Launch</span>
+                  <span class="toggle-desc">Automatically starts the Discord bot when the manager opens.</span>
+                </div>
+                <label class="toggle-switch" for="set-auto-start-bot">
+                  <input type="checkbox" id="set-auto-start-bot">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="settings-footer">
+            <button type="submit" class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+            <span class="save-status-msg" id="settings-status-message"></span>
+          </div>
+        </form>
+        
+        <!-- DANGER ZONE -->
+        <div class="danger-zone">
+          <h3>Danger Zone</h3>
+          <p>High-priority commands and operations that could disrupt active sessions.</p>
+          <div class="danger-actions-row">
+            <button class="btn btn-danger" id="btn-danger-reset-whitelist">Reset Whitelist</button>
+            <button class="btn" id="btn-danger-open-folder">Open Server Folder</button>
+            <button class="btn" id="btn-danger-open-logs">Open logs/latest.log</button>
+          </div>
+        </div>
+      </section>
+      
+    </main>
+  </div>
+  
+  <script src="app.js"></script>
+</body>
+</html>
