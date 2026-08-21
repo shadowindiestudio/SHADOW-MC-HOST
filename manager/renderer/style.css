@@ -914,3 +914,228 @@ body {
   transform: translateX(16px) translateY(-50%);
   background-color: var(--status-online);
 }
+
+/* ===========================================================================
+   Server Profiles Panel
+   =========================================================================== */
+
+.server-profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.server-profile-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.server-profile-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.server-profile-card.active {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-color) inset;
+}
+
+.server-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.server-profile-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.server-profile-id {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.server-profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.server-profile-meta span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.server-profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.server-profile-actions .btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+  background: var(--hover-bg);
+}
+
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.modal-body .form-group {
+  margin-bottom: 16px;
+}
+
+.modal-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.modal-body label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.modal-body input,
+.modal-body textarea,
+.modal-body select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+.modal-body input:focus,
+.modal-body textarea:focus,
+.modal-body select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.modal-body textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.modal-body .form-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.modal-footer .btn {
+  padding: 10px 20px;
+}
+
+.modal-footer .btn-secondary {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.modal-footer .btn-secondary:hover {
+  background: var(--hover-bg);
+}
+
+/* Active server indicator in sidebar */
+.server-sidebar-info {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+}

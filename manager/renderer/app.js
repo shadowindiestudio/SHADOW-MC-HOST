@@ -14,6 +14,11 @@ let serverUptimeStart = 0;   // ms timestamp when server came online
 let uptimeTickId      = null; // setInterval for uptime counter
 let serverMaxRamMB    = 0;
 
+// Server profiles state
+let serverProfiles = {};
+let activeServerId = 'default';
+
+
 // ===========================================================================
 // DOM References
 // ===========================================================================
@@ -84,6 +89,23 @@ const setAutoStartBot         = document.getElementById('set-auto-start-bot');
 const btnDangerResetWhitelist = document.getElementById('btn-danger-reset-whitelist');
 const btnDangerOpenFolder     = document.getElementById('btn-danger-open-folder');
 const btnDangerOpenLogs       = document.getElementById('btn-danger-open-logs');
+
+// Server Profiles
+const btnAddServer        = document.getElementById('btn-add-server');
+const btnCloseAddServer   = document.getElementById('btn-close-add-server');
+const btnCancelAddServer   = document.getElementById('btn-cancel-add-server');
+const btnConfirmAddServer  = document.getElementById('btn-confirm-add-server');
+const addServerModal      = document.getElementById('add-server-modal');
+const serverProfilesGrid  = document.getElementById('server-profiles-grid');
+const serversEmptyState   = document.getElementById('servers-empty-state');
+const newServerId         = document.getElementById('new-server-id');
+const newServerName       = document.getElementById('new-server-name');
+const newServerPath       = document.getElementById('new-server-path');
+const newServerBotdir     = document.getElementById('new-server-botdir');
+const newServerMaxram    = document.getElementById('new-server-maxram');
+const newServerNotes      = document.getElementById('new-server-notes');
+const addServerForm       = document.getElementById('add-server-form');
+
 
 // ===========================================================================
 // Helpers
@@ -195,6 +217,7 @@ function switchPanel(id) {
 
   if (id === 'console')  loadConsoleHistory();
   if (id === 'settings') loadSettings();
+  if (id === 'servers') loadServerProfiles();
   if (id === 'players')  refreshPlayersPanel();
 }
 
@@ -743,4 +766,156 @@ btnDangerOpenFolder.addEventListener('click', () => window.api.dangerOpenFolder(
 btnDangerOpenLogs.addEventListener('click', async () => {
   const res = await window.api.dangerOpenLogs();
   if (!res.success) alert(res.error);
+});
+
+
+// ===========================================================================
+// Server Profiles Management
+// ===========================================================================
+
+async function loadServerProfiles() {
+  try {
+    const result = await window.api.getServerProfiles();
+    if (result.success) {
+      serverProfiles = result.profiles;
+      activeServerId = result.active;
+      renderServerProfiles();
+    }
+  } catch (e) {
+    console.error('Failed to load server profiles:', e);
+    serverProfilesGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Error Loading Profiles</h3><p>' + e.message + '</p></div>';
+  }
+}
+
+function renderServerProfiles() {
+  if (Object.keys(serverProfiles).length === 0) {
+    serversEmptyState.style.display = 'block';
+    serverProfilesGrid.innerHTML = '';
+    return;
+  }
+
+  serversEmptyState.style.display = 'none';
+  serverProfilesGrid.innerHTML = '';
+
+  for (const [id, profile] of Object.entries(serverProfiles)) {
+    const card = document.createElement('div');
+    card.className = 'server-profile-card' + (id === activeServerId ? ' active' : '');
+    card.dataset.serverId = id;
+
+    card.innerHTML = `
+      <div class="server-profile-header">
+        <h4 class="server-profile-name">${escapeHtml(profile.name || id)}</h4>
+        <span class="server-profile-id">${escapeHtml(id)}</span>
+      </div>
+      <div class="server-profile-meta">
+        <span>📁 ${escapeHtml(profile.rootPath || '..')}</span>
+        <span>💾 ${escapeHtml(profile.maxRam || '10G')}</span>
+        ${profile.notes ? '<span>📝 ' + escapeHtml(profile.notes) + '</span>' : ''}
+      </div>
+      <div class="server-profile-actions">
+        <button class="btn btn-sm ${id === activeServerId ? 'btn-primary' : ''}" onclick="setActiveServer('${id}')">
+          ${id === activeServerId ? 'Active' : 'Activate'}
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="removeServerProfile('${id}')">Remove</button>
+      </div>
+    `;
+
+    serverProfilesGrid.appendChild(card);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function setActiveServer(serverId) {
+  if (serverId === activeServerId) return;
+  
+  try {
+    const result = await window.api.setActiveServer(serverId);
+    if (result.success) {
+      activeServerId = serverId;
+      renderServerProfiles();
+      // Reload status to reflect the new server
+      pollStatus();
+    }
+  } catch (e) {
+    console.error('Failed to set active server:', e);
+  }
+}
+
+async function removeServerProfile(serverId) {
+  if (!confirm('Are you sure you want to remove server profile: ' + serverId + '?')) return;
+  
+  try {
+    const result = await window.api.removeServerProfile(serverId);
+    if (result.success) {
+      delete serverProfiles[serverId];
+      if (activeServerId === serverId) {
+        activeServerId = Object.keys(serverProfiles)[0] || 'default';
+      }
+      renderServerProfiles();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (e) {
+    console.error('Failed to remove server profile:', e);
+  }
+}
+
+// Modal handlers
+btnAddServer.addEventListener('click', () => {
+  addServerModal.classList.add('active');
+  newServerId.value = '';
+  newServerName.value = '';
+  newServerPath.value = '..';
+  newServerBotdir.value = '../mc-bot';
+  newServerMaxram.value = '10G';
+  newServerNotes.value = '';
+});
+
+btnCloseAddServer.addEventListener('click', () => addServerModal.classList.remove('active'));
+btnCancelAddServer.addEventListener('click', () => addServerModal.classList.remove('active'));
+
+btnConfirmAddServer.addEventListener('click', async () => {
+  const profile = {
+    id: newServerId.value.trim() || Date.now().toString(),
+    name: newServerName.value.trim() || newServerId.value.trim(),
+    rootPath: newServerPath.value.trim(),
+    botDir: newServerBotdir.value.trim(),
+    maxRam: newServerMaxram.value.trim(),
+    notes: newServerNotes.value.trim()
+  };
+
+  if (!profile.id) {
+    alert('Please enter a profile ID');
+    return;
+  }
+
+  try {
+    const result = await window.api.addServerProfile(profile);
+    if (result.success) {
+      addServerModal.classList.remove('active');
+      loadServerProfiles();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (e) {
+    console.error('Failed to add server profile:', e);
+    alert('Failed to add server profile: ' + e.message);
+  }
+});
+
+// Close modal on escape key
+addServerModal.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') addServerModal.classList.remove('active');
+});
+
+// Close modal when clicking outside
+document.getElementById('add-server-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'add-server-modal') {
+    addServerModal.classList.remove('active');
+  }
 });
