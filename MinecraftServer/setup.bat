@@ -1,6 +1,6 @@
 @echo off
 echo ================================
-echo      SHADOW SMP - SERVER SETUP
+echo       MINECRAFT SERVER SETUP
 echo ================================
 echo.
 
@@ -57,9 +57,9 @@ call npm install
 echo Registering Discord slash commands...
 cd /d "%~dp0mc-bot" && node deploy-commands.js
 
-:: Accept EULA
+:: Do not accept the Minecraft EULA automatically.
 cd /d "%~dp0"
-echo eula=true> eula.txt
+echo eula=false> eula.txt
 
 echo.
 echo ================================
@@ -69,8 +69,9 @@ echo Java        : installed
 echo Node.js     : installed
 echo Bot deps    : installed
 echo Manager     : installed
-echo EULA        : accepted
+echo EULA        : review eula.txt and accept manually
 echo ================================
+echo Review the Minecraft EULA, then set eula=true in eula.txt before starting.
 echo Run start-manager.bat to launch the dashboard.
 echo Run start-bot.bat to launch the Discord bot.
 echo ================================

@@ -14,6 +14,7 @@ const SERVER_PATH = process.env.SERVER_PATH || "../";
 const MC_DIR = path.resolve(__dirname, SERVER_PATH);
 const SERVER_JAR = process.env.SERVER_JAR || "server.jar";
 const JAVA = process.env.JAVA_PATH || "java";
+const SERVER_PROPERTIES = path.join(MC_DIR, "server.properties");
 
 // Store server PID for process tracking
 let serverPID = null;
@@ -23,13 +24,35 @@ let serverProcess = null;
 
 let activeRcon = null;
 
+function readServerProperties() {
+  try {
+    const content = fs.readFileSync(SERVER_PROPERTIES, "utf8");
+    return Object.fromEntries(
+      content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"))
+        .map((line) => {
+          const separator = line.indexOf("=");
+          return separator === -1
+            ? [line, ""]
+            : [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+        })
+    );
+  } catch (err) {
+    console.warn(`[CONFIG] Could not read ${SERVER_PROPERTIES}: ${err.message}`);
+    return {};
+  }
+}
+
 async function getRcon() {
   if (activeRcon) return activeRcon;
 
+  const properties = readServerProperties();
   activeRcon = await Rcon.connect({
-    host: process.env.RCON_HOST,
-    port: Number(process.env.RCON_PORT),
-    password: process.env.RCON_PASSWORD,
+    host: properties["server-ip"] || process.env.RCON_HOST || "127.0.0.1",
+    port: Number(properties["rcon.port"] || process.env.RCON_PORT || 25575),
+    password: properties["rcon.password"] || process.env.RCON_PASSWORD,
   });
 
   activeRcon.on("end", () => {
