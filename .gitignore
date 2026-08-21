@@ -12,33 +12,33 @@
 **/npm-debug.log*
 
 # Minecraft runtime data
-MinecraftServer/world*/
-MinecraftServer/logs/
-MinecraftServer/crash-reports/
-MinecraftServer/plugins/
-MinecraftServer/backups/
-MinecraftServer/versions/
-MinecraftServer/cache/
-MinecraftServer/*.log
-MinecraftServer/**/*.log
-MinecraftServer/.console_history
-MinecraftServer/*.pid
-MinecraftServer/manager/*.pid
-MinecraftServer/eula.txt
-MinecraftServer/ops.json
-MinecraftServer/whitelist.json
-MinecraftServer/usercache.json
-MinecraftServer/banned-players.json
-MinecraftServer/banned-ips.json
-MinecraftServer/permissions.yml
-MinecraftServer/commands.yml
-MinecraftServer/server-icon.png
+world*/
+logs/
+crash-reports/
+plugins/
+backups/
+versions/
+cache/
+*.log
+**/*.log
+.console_history
+*.pid
+manager/*.pid
+eula.txt
+ops.json
+whitelist.json
+usercache.json
+banned-players.json
+banned-ips.json
+permissions.yml
+commands.yml
+server-icon.png
 
 # Local server/config state
-MinecraftServer/server.properties.local
-MinecraftServer/config/local/
-MinecraftServer/mc-bot/bot.log
-MinecraftServer/manager/manager-settings.json
+server.properties.local
+config/local/
+mc-bot/bot.log
+manager/manager-settings.json
 
 # OS/editor files
 attached_assets/
