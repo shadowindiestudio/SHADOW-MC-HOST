@@ -23,7 +23,7 @@ By participating in this project, you agree to abide by the [Code of Conduct](CO
 
 ```bash
 # Clone the repository
-git clone https://github.com/shadowindiestudio/mcserver.git
+git clone https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST.git
 cd mcserver
 
 # Install dependencies for manager
@@ -223,7 +223,7 @@ When adding new features or changing existing ones:
 
 If you have questions about contributing:
 
-1. Check the [GitHub Discussions](https://github.com/shadowindiestudio/mcserver/discussions)
+1. Check the [GitHub Discussions](https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST/discussions)
 2. Open an issue with your question
 3. Join our Discord (if available)
 

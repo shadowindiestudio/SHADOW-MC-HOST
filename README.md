@@ -1,4 +1,4 @@
-# Shadow MC Host
+# SHADOW MC HOST
 
 > **Open-source Minecraft server management for Windows**
 
@@ -38,7 +38,7 @@ A powerful, user-friendly desktop application for managing PaperMC Minecraft ser
 
 ```bash
 # Clone the repository
-git clone https://github.com/shadowindiestudio/mcserver.git
+git clone https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST.git
 cd mcserver
 
 # Install dependencies (in manager directory)
@@ -218,8 +218,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/shadowindiestudio/mcserver/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/shadowindiestudio/mcserver/discussions)
+- **Issues**: [GitHub Issues](https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST/discussions)
 
 ---
 

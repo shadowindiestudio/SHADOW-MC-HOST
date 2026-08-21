@@ -1,7 +1,7 @@
 {
-  "name": "shadow-mc-host",
+  "name": "SHADOW-MC-HOST",
   "version": "1.0.0",
-  "description": "Desktop manager for Shadow MC Host PaperMC Minecraft Server and Discord Bot",
+  "description": "Desktop manager for SHADOW MC HOST - Minecraft Server Manager with Discord Bot",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
