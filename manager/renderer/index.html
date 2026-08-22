@@ -16,7 +16,7 @@
     <!-- LEFT SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h1 class="app-title">☠ SHADOW MC HOST</h1>
+        <h1 class="app-title">\u2620 SHADOW MC HOST</h1>
       </div>
       
       <nav class="nav-menu">
@@ -36,6 +36,10 @@
         <button class="nav-btn" data-panel="settings">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
           Settings
+        </button>
+        <button class="nav-btn" data-panel="setup">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 15.55C9.24 15.55 6.97 13.28 6.97 11C6.97 8.72 9.24 6.45 12 6.45C14.76 6.45 17.03 8.72 17.03 11C17.03 13.28 14.76 15.55 12 15.55M19.35 7.64C18.27 6.97 16.98 6.64 15.64 6.64C14.65 6.64 14.32 6.97 13.65 7.64C13.31 7.98 13.31 8.51 13.65 8.85L15.89 11.09C16.28 11.48 16.91 11.48 17.29 11.09L19.54 8.85C19.88 8.51 19.88 7.98 19.54 7.64M4.46 16.36C5.73 17.03 7.02 17.36 8.36 17.36C9.35 17.36 9.68 17.03 10.35 16.36C10.69 16.02 10.69 15.49 10.35 15.15L8.11 12.91C7.72 12.52 7.09 12.52 6.71 12.91L4.46 15.15C4.12 15.49 4.12 16.02 4.46 16.36M12 4C12.55 4 13 4.45 13 5C13 5.55 12.55 6 12 6C11.45 6 11 5.55 11 5C11 4.45 11.45 4 12 4Z"/></svg>
+          Setup
         </button>
       </nav>
       
@@ -61,6 +65,27 @@
           <span class="timestamp-live" id="dashboard-clock">2026-05-23 15:44</span>
         </div>
         
+        <!-- QUICK START SECTION -->
+        <div class="card quickstart-card" id="quickstart-panel">
+          <h3>\ud83d\udfe2 One-Click Start</h3>
+          <p>Click the button below to automatically check everything and start your Minecraft server and Discord bot.</p>
+          <p><strong>This will:</strong></p>
+          <ul class="quickstart-list">
+            <li>Check for Node.js and Java 25+</li>
+            <li>Download PaperMC server if missing</li>
+            <li>Create all necessary configuration files</li>
+            <li>Install npm dependencies</li>
+            <li>Start the Minecraft server</li>
+            <li>Start the Discord bot (if configured)</li>
+          </ul>
+          <div class="quickstart-actions">
+            <button class="btn btn-primary btn-lg" id="btn-oneclick-start">
+              \ud83d\udce9 One-Click Start Everything
+            </button>
+          </div>
+          <p class="quickstart-note">\u26a0\ufe0f This may take a few minutes on first run. Check the Console for progress.</p>
+        </div>
+
         <div class="dashboard-grid">
           <!-- SERVER CARD -->
           <div class="card process-card" id="server-card">
@@ -72,7 +97,7 @@
             <div class="card-body">
               <div class="metric-row">
                 <span class="metric-label">RAM Usage:</span>
-                <span class="metric-value" id="server-ram-value">0 MB / 10240 MB</span>
+                <span class="metric-value" id="server-ram-value">0 MB / 4096 MB</span>
               </div>
               <div class="progress-bar-container">
                 <div class="progress-bar" id="server-ram-bar" style="width: 0%"></div>
@@ -120,7 +145,7 @@
         <div class="widgets-row">
           <div class="card widget-card">
             <h4>Online Players</h4>
-            <div class="widget-large-val tabular-nums" id="widget-player-count">0/10</div>
+            <div class="widget-large-val tabular-nums" id="widget-player-count">0/20</div>
             <div class="progress-bar-container">
               <div class="progress-bar" id="widget-player-bar" style="width: 0%"></div>
             </div>
@@ -139,7 +164,36 @@
             <button class="btn btn-sm" id="btn-go-to-console">View Full Console</button>
           </div>
           <div class="mini-console-body console-output-box" id="mini-console-output">
-            <div class="console-line system-line">[System] Click 'Start' to launch the server.</div>
+            <div class="console-line system-line">[System] Click 'One-Click Start' above or use the controls below.</div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- SETUP PANEL -->
+      <section class="panel" id="setup-panel">
+        <div class="panel-header">
+          <h2>\ud83d\udd27 Auto-Setup</h2>
+        </div>
+        
+        <div class="setup-container">
+          <div class="setup-section">
+            <h3>Prerequisites Check</h3>
+            <p>Check if all required software is installed.</p>
+            <button class="btn btn-primary" id="btn-check-prereqs">Check Prerequisites</button>
+            <div class="progress-bar-container" style="margin-top: 15px;">
+              <div class="progress-bar" id="setup-progress" style="width: 0%"></div>
+            </div>
+            <div class="setup-status" id="setup-status"></div>
+            
+            <div class="prereqs-list" id="prereqs-list"></div>
+          </div>
+          
+          <div class="setup-section">
+            <h3>Auto-Setup Server</h3>
+            <p>Automatically download PaperMC, create configuration files, and set up everything.</p>
+            <button class="btn btn-primary" id="btn-run-setup">Run Auto-Setup</button>
+            
+            <div class="setup-steps" id="setup-steps-list"></div>
           </div>
         </div>
       </section>
@@ -178,7 +232,7 @@
         
         <!-- Players empty state -->
         <div class="empty-state" id="players-empty-state">
-          <div class="empty-icon">☠</div>
+          <div class="empty-icon">\u2620</div>
           <h3>No players currently exploring the shadow realm</h3>
           <p>Players will appear here once they connect to the server.</p>
         </div>
@@ -213,7 +267,7 @@
               <h3>Server Configuration</h3>
               <div class="form-group">
                 <label for="set-max-players">Max Players</label>
-                <input type="number" id="set-max-players" min="1" max="999" placeholder="10">
+                <input type="number" id="set-max-players" min="1" max="999" placeholder="20">
               </div>
               <div class="form-group">
                 <label for="set-view-dist">View Distance (chunks)</label>
@@ -244,8 +298,8 @@
               </div>
               <div class="form-group">
                 <label for="set-max-ram">Allocated Server RAM (Xmx/Xms)</label>
-                <input type="text" id="set-max-ram" placeholder="e.g. 10G or 4096M">
-                <small class="form-note">Must be specified as e.g. 10G or 8192M. Updates start.bat directly.</small>
+                <input type="text" id="set-max-ram" placeholder="e.g. 4G or 4096M">
+                <small class="form-note">Must be specified as e.g. 4G or 4096M. Updates start.bat directly.</small>
               </div>
             </div>
           </div>
@@ -330,7 +384,7 @@
         <div class="server-profiles-grid" id="server-profiles-grid">
           <!-- Server profile cards will be inserted here dynamically -->
           <div class="empty-state" id="servers-empty-state">
-            <div class="empty-icon">🖥️</div>
+            <div class="empty-icon">\ud83d\udda5\ufe0f</div>
             <h3>No server profiles configured</h3>
             <p>Click "Add Server" to create your first server profile.</p>
           </div>
@@ -355,7 +409,7 @@
                 </div>
                 <div class="form-group">
                   <label for="new-server-path">Server Directory Path</label>
-                  <input type="text" id="new-server-path" placeholder="e.g., ../creative-server" value=".." required>
+                  <input type="text" id="new-server-path" placeholder="e.g., ../server" value="../server" required>
                   <small class="form-note">Path relative to manager/ directory</small>
                 </div>
                 <div class="form-group">
@@ -364,7 +418,7 @@
                 </div>
                 <div class="form-group">
                   <label for="new-server-maxram">Max RAM</label>
-                  <input type="text" id="new-server-maxram" placeholder="e.g., 10G or 4096M" value="10G" required>
+                  <input type="text" id="new-server-maxram" placeholder="e.g., 4G or 4096M" value="4G" required>
                 </div>
                 <div class="form-group">
                   <label for="new-server-notes">Notes</label>

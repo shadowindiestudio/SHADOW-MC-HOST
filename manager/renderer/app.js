@@ -18,6 +18,12 @@ let serverMaxRamMB    = 0;
 let serverProfiles = {};
 let activeServerId = 'default';
 
+// Setup state
+let setupInProgress = false;
+let setupSteps = [];
+let prerequisitesChecked = false;
+let prerequisitesStatus = {};
+
 
 // ===========================================================================
 // DOM References
@@ -106,6 +112,19 @@ const newServerMaxram    = document.getElementById('new-server-maxram');
 const newServerNotes      = document.getElementById('new-server-notes');
 const addServerForm       = document.getElementById('add-server-form');
 
+// Setup Panel Elements
+const setupPanel         = document.getElementById('setup-panel');
+const btnRunSetup         = document.getElementById('btn-run-setup');
+const btnCheckPrereqs     = document.getElementById('btn-check-prereqs');
+const setupProgress       = document.getElementById('setup-progress');
+const setupStatus         = document.getElementById('setup-status');
+const prereqsList         = document.getElementById('prereqs-list');
+const setupStepsList      = document.getElementById('setup-steps-list');
+
+// Quick Start Panel
+const quickStartPanel     = document.getElementById('quickstart-panel');
+const btnOneClickStart    = document.getElementById('btn-oneclick-start');
+
 
 // ===========================================================================
 // Helpers
@@ -119,11 +138,11 @@ function formatUptime(ms) {
   return `${h}:${m}:${sec}`;
 }
 
-/** Parse allocated RAM string "10G" or "10240M" → number of MB */
+/** Parse allocated RAM string "10G" or "10240M" => number of MB */
 function ramToMB(str) {
-  if (!str) return 10240;
+  if (!str) return 4096;
   const m = String(str).match(/^(\d+)([GgMm])$/);
-  if (!m) return 10240;
+  if (!m) return 4096;
   const num = parseInt(m[1], 10);
   return m[2].toUpperCase() === 'G' ? num * 1024 : num;
 }
@@ -219,6 +238,7 @@ function switchPanel(id) {
   if (id === 'settings') loadSettings();
   if (id === 'servers') loadServerProfiles();
   if (id === 'players')  refreshPlayersPanel();
+  if (id === 'setup') checkPrerequisites();
 }
 
 navBtns.forEach(b => b.addEventListener('click', () => switchPanel(b.dataset.panel)));
@@ -239,7 +259,7 @@ function applyServerStatus(state, extras = {}) {
 
   // Badge
   serverStatusBadge.className = `status-badge ${isOnline ? 'online' : isStarting ? 'warning' : 'offline'}`;
-  serverStatusBadge.textContent = isOnline ? 'Online' : isStarting ? 'Starting…' : 'Offline';
+  serverStatusBadge.textContent = isOnline ? 'Online' : isStarting ? 'Starting...' : 'Offline';
 
   // Buttons
   btnStartServer.disabled   = isOnline || isStarting;
@@ -345,7 +365,7 @@ window.api.onSpawnError(({ source, message }) => {
 btnStartServer.addEventListener('click', async () => {
   btnStartServer.disabled = true;
   applyServerStatus('starting');
-  appendSystemLine(miniConsoleOutput, '[System] Starting Minecraft server…');
+  appendSystemLine(miniConsoleOutput, '[System] Starting Minecraft server...');
 
   const res = await window.api.startServer();
   if (!res.success) {
@@ -353,16 +373,15 @@ btnStartServer.addEventListener('click', async () => {
     appendSystemLine(miniConsoleOutput, `[Error] ${res.error}`);
     if (activePanel === 'console') appendSystemLine(fullConsoleOutput, `[Error] ${res.error}`);
   } else {
-    appendSystemLine(miniConsoleOutput, `[System] Server process started (PID ${res.pid}). Waiting for RCON…`);
+    appendSystemLine(miniConsoleOutput, `[System] Server process started (PID ${res.pid}). Waiting for RCON...`);
   }
-  // Status will settle via polling or status-change push
 });
 
 btnStopServer.addEventListener('click', async () => {
   if (!confirm('Are you sure you want to stop the Minecraft Server?')) return;
   btnStopServer.disabled    = true;
   btnRestartServer.disabled = true;
-  appendSystemLine(miniConsoleOutput, '[System] Stopping server…');
+  appendSystemLine(miniConsoleOutput, '[System] Stopping server...');
 
   const res = await window.api.stopServer();
   if (!res.success) {
@@ -378,7 +397,7 @@ btnRestartServer.addEventListener('click', async () => {
   btnRestartServer.disabled = true;
   btnStopServer.disabled    = true;
   btnStartServer.disabled   = true;
-  appendSystemLine(miniConsoleOutput, '[System] Restarting server…');
+  appendSystemLine(miniConsoleOutput, '[System] Restarting server...');
 
   const res = await window.api.restartServer();
   if (!res.success) {
@@ -386,13 +405,13 @@ btnRestartServer.addEventListener('click', async () => {
     applyServerStatus('offline');
   } else {
     applyServerStatus('starting');
-    appendSystemLine(miniConsoleOutput, '[System] Server restarting. Waiting for RCON…');
+    appendSystemLine(miniConsoleOutput, '[System] Server restarting. Waiting for RCON...');
   }
 });
 
 btnStartBot.addEventListener('click', async () => {
   btnStartBot.disabled = true;
-  appendSystemLine(miniConsoleOutput, '[System] Starting Discord bot…');
+  appendSystemLine(miniConsoleOutput, '[System] Starting Discord bot...');
 
   const res = await window.api.startBot();
   if (!res.success) {
@@ -433,7 +452,7 @@ async function fetchLiveStats() {
   try {
     const r = await window.api.sendServerCommand('tps');
     if (r.success && r.response) {
-      const clean = r.response.replace(/§[0-9a-fk-or]/gi, '');
+      const clean = r.response.replace(/\u00a7[0-9a-fk-or]/gi, '');
       const parts = clean.split(':');
       let tps = null;
       if (parts.length > 1) {
@@ -689,13 +708,13 @@ async function toggleOp(name, isOp) {
 async function loadSettings() {
   try {
     const cfg = await window.api.readSettings();
-    setMaxPlayers.value   = cfg.maxPlayers        ?? 10;
+    setMaxPlayers.value   = cfg.maxPlayers        ?? 20;
     setViewDist.value     = cfg.viewDistance       ?? 10;
     setSimDist.value      = cfg.simulationDistance ?? 10;
     setMotd.value         = cfg.motd               ?? '';
     setRconPass.value     = cfg.rconPassword       ?? '';
     setDiscordToken.value = cfg.discordToken       ?? '';
-    setMaxRam.value       = cfg.maxRam             ?? '10G';
+    setMaxRam.value       = cfg.maxRam             ?? '4G';
 
     // App Behaviour toggles
     const ms = await window.api.readManagerSettings();
@@ -718,7 +737,7 @@ btnToggleTokenMask.addEventListener('click', () => {
 settingsFormEl.addEventListener('submit', async e => {
   e.preventDefault();
   settingsStatusMessage.className   = 'save-status-msg';
-  settingsStatusMessage.textContent = 'Saving…';
+  settingsStatusMessage.textContent = 'Saving...';
 
   const updates = {
     maxPlayers:        parseInt(setMaxPlayers.value, 10),
@@ -783,7 +802,7 @@ async function loadServerProfiles() {
     }
   } catch (e) {
     console.error('Failed to load server profiles:', e);
-    serverProfilesGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Error Loading Profiles</h3><p>' + e.message + '</p></div>';
+    serverProfilesGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><h3>Error Loading Profiles</h3><p>' + e.message + '</p></div>';
   }
 }
 
@@ -808,9 +827,9 @@ function renderServerProfiles() {
         <span class="server-profile-id">${escapeHtml(id)}</span>
       </div>
       <div class="server-profile-meta">
-        <span>📁 ${escapeHtml(profile.rootPath || '..')}</span>
-        <span>💾 ${escapeHtml(profile.maxRam || '10G')}</span>
-        ${profile.notes ? '<span>📝 ' + escapeHtml(profile.notes) + '</span>' : ''}
+        <span>\ud83d\udcc1 ${escapeHtml(profile.rootPath || '../server')}</span>
+        <span>\ud83d\udcbe ${escapeHtml(profile.maxRam || '4G')}</span>
+        ${profile.notes ? '<span>\ud83d\udcdd ' + escapeHtml(profile.notes) + '</span>' : ''}
       </div>
       <div class="server-profile-actions">
         <button class="btn btn-sm ${id === activeServerId ? 'btn-primary' : ''}" onclick="setActiveServer('${id}')">
@@ -870,9 +889,9 @@ btnAddServer.addEventListener('click', () => {
   addServerModal.classList.add('active');
   newServerId.value = '';
   newServerName.value = '';
-  newServerPath.value = '..';
+  newServerPath.value = '../server';
   newServerBotdir.value = '../mc-bot';
-  newServerMaxram.value = '10G';
+  newServerMaxram.value = '4G';
   newServerNotes.value = '';
 });
 
@@ -919,3 +938,218 @@ document.getElementById('add-server-modal').addEventListener('click', (e) => {
     addServerModal.classList.remove('active');
   }
 });
+
+// ===========================================================================
+// Setup Panel Functions
+// ===========================================================================
+
+async function checkPrerequisites() {
+  if (prerequisitesChecked) {
+    renderPrerequisites();
+    return;
+  }
+
+  setupStatus.textContent = 'Checking prerequisites...';
+  setupStatus.className = 'setup-status checking';
+  setupProgress.style.width = '20%';
+
+  try {
+    const result = await window.api.checkPrerequisites();
+    prerequisitesStatus = result.checks || {};
+    prerequisitesChecked = true;
+    renderPrerequisites();
+    setupProgress.style.width = '100%';
+    setupStatus.textContent = 'Prerequisites check complete!';
+    setupStatus.className = 'setup-status success';
+  } catch (e) {
+    setupStatus.textContent = 'Error checking prerequisites: ' + e.message;
+    setupStatus.className = 'setup-status error';
+    console.error('Prerequisites check failed:', e);
+  }
+}
+
+function renderPrerequisites() {
+  if (!prereqsList) return;
+
+  prereqsList.innerHTML = '';
+
+  const checks = [
+    { name: 'Node.js', key: 'node', icon: '\ud83d\udcbb', description: 'Required for running the manager and bot' },
+    { name: 'Java 25+', key: 'java', icon: '\u2615', description: 'Required for running Minecraft server' },
+    { name: 'server.jar', key: 'serverJar', icon: '\ud83c\udfae', description: 'PaperMC server JAR file' },
+    { name: 'npm dependencies', key: 'dependencies', icon: '\ud83c\udf10', description: 'Node.js packages for manager and bot' }
+  ];
+
+  checks.forEach(check => {
+    const item = document.createElement('div');
+    item.className = 'prereq-item';
+    
+    const status = prerequisitesStatus[check.key];
+    const statusIcon = status ? '\u2705' : '\u274c';
+    const statusText = status ? 'Installed' : 'Not found';
+    const statusClass = status ? 'prereq-ready' : 'prereq-missing';
+
+    item.innerHTML = `
+      <div class="prereq-icon">${check.icon}</div>
+      <div class="prereq-info">
+        <span class="prereq-name">${check.name}</span>
+        <span class="prereq-desc">${check.description}</span>
+      </div>
+      <div class="prereq-status ${statusClass}">
+        <span>${statusIcon}</span>
+        <span>${statusText}</span>
+      </div>
+    `;
+
+    prereqsList.appendChild(item);
+  });
+
+  // Check if all prerequisites are met
+  const allReady = Object.values(prerequisitesStatus).every(v => v === true);
+  if (btnRunSetup) {
+    btnRunSetup.disabled = allReady;
+    btnRunSetup.textContent = allReady ? 'All Ready!' : 'Run Auto-Setup';
+  }
+}
+
+async function runAutoSetup() {
+  if (setupInProgress) return;
+
+  setupInProgress = true;
+  setupSteps = [];
+  setupStepsList.innerHTML = '';
+  setupStatus.textContent = 'Starting auto-setup...';
+  setupStatus.className = 'setup-status checking';
+  setupProgress.style.width = '0%';
+
+  try {
+    const result = await window.api.runAutoSetup();
+    setupSteps = result.steps || [];
+    
+    // Render steps
+    result.steps.forEach((step, index) => {
+      const item = document.createElement('div');
+      item.className = 'setup-step';
+      const isError = step.startsWith('ERROR:') || step.includes('failed');
+      const isSuccess = step.includes('created') || step.includes('downloaded') || step.includes('installed');
+      const icon = isError ? '\u274c' : isSuccess ? '\u2705' : '\u2192';
+      const className = isError ? 'step-error' : isSuccess ? 'step-success' : 'step-info';
+      
+      item.innerHTML = `<span class="step-icon">${icon}</span><span class="step-text">${step}</span>`;
+      item.className = `setup-step ${className}`;
+      setupStepsList.appendChild(item);
+    });
+
+    // Update progress
+    const progress = Math.min(100, (result.steps.filter(s => !s.includes('ERROR')).length / result.steps.length) * 100);
+    setupProgress.style.width = `${progress}%`;
+
+    if (progress >= 100 || result.steps.every(s => !s.startsWith('ERROR:'))) {
+      setupStatus.textContent = 'Auto-setup complete! You can now start the server.';
+      setupStatus.className = 'setup-status success';
+      
+      // Check prerequisites again
+      setTimeout(() => {
+        prerequisitesChecked = false;
+        checkPrerequisites();
+      }, 2000);
+    } else {
+      setupStatus.textContent = 'Auto-setup completed with some errors. Check the list above.';
+      setupStatus.className = 'setup-status warning';
+    }
+
+  } catch (e) {
+    setupStatus.textContent = 'Auto-setup failed: ' + e.message;
+    setupStatus.className = 'setup-status error';
+    console.error('Auto-setup failed:', e);
+  } finally {
+    setupInProgress = false;
+  }
+}
+
+// Setup button handlers
+if (btnRunSetup) {
+  btnRunSetup.addEventListener('click', runAutoSetup);
+}
+if (btnCheckPrereqs) {
+  btnCheckPrereqs.addEventListener('click', checkPrerequisites);
+}
+
+// ===========================================================================
+// Quick Start Panel - One-Click Start
+// ===========================================================================
+
+async function oneClickStart() {
+  if (setupInProgress) return;
+  setupInProgress = true;
+
+  try {
+    // First check prerequisites
+    appendSystemLine(miniConsoleOutput, '[One-Click] Checking prerequisites...');
+    const prereqs = await window.api.checkPrerequisites();
+    
+    // If server.jar is missing, run auto-setup
+    if (!prereqs.checks.serverJar) {
+      appendSystemLine(miniConsoleOutput, '[One-Click] Server JAR missing - running auto-setup...');
+      const setupResult = await window.api.runAutoSetup();
+      setupResult.steps.forEach(step => appendSystemLine(miniConsoleOutput, `[One-Click] ${step}`));
+    }
+
+    // Start the server
+    appendSystemLine(miniConsoleOutput, '[One-Click] Starting Minecraft server...');
+    const serverResult = await window.api.startServer();
+    
+    if (serverResult.success) {
+      appendSystemLine(miniConsoleOutput, `[One-Click] Server started successfully (PID ${serverResult.pid})`);
+      applyServerStatus('starting');
+      
+      // Wait a bit then start the bot
+      setTimeout(async () => {
+        appendSystemLine(miniConsoleOutput, '[One-Click] Starting Discord bot...');
+        const botResult = await window.api.startBot();
+        if (botResult.success) {
+          appendSystemLine(miniConsoleOutput, `[One-Click] Bot started successfully (PID ${botResult.pid})`);
+          applyBotStatus('online');
+          appendSystemLine(miniConsoleOutput, '[One-Click] Everything is ready!');
+        } else {
+          appendSystemLine(miniConsoleOutput, `[One-Click] Bot failed to start: ${botResult.error}`);
+        }
+      }, 5000);
+    } else {
+      appendSystemLine(miniConsoleOutput, `[One-Click] Server failed to start: ${serverResult.error}`);
+      applyServerStatus('offline');
+    }
+
+  } catch (e) {
+    appendSystemLine(miniConsoleOutput, `[One-Click] Error: ${e.message}`);
+    console.error('One-click start failed:', e);
+  } finally {
+    setupInProgress = false;
+  }
+}
+
+if (btnOneClickStart) {
+  btnOneClickStart.addEventListener('click', () => {
+    if (confirm('This will automatically check everything and start the server and bot. Continue?')) {
+      oneClickStart();
+    }
+  });
+}
+
+// ===========================================================================
+// Auto-check on first load
+// ===========================================================================
+// Check if this is first run and show setup panel
+setTimeout(async () => {
+  try {
+    const status = await window.api.getStatus();
+    // If server is offline and no setup has been done, show setup panel
+    if (status.server === 'offline' && !status.serverPid) {
+      // Check if server directory exists
+      // For now, just ensure dashboard is active
+      switchPanel('dashboard');
+    }
+  } catch (e) {
+    console.log('First run check failed, staying on dashboard');
+  }
+}, 1000);

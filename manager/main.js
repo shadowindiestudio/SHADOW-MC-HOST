@@ -6,19 +6,22 @@ const fs = require('fs');
 const { spawn, exec, execSync } = require('child_process');
 const { Rcon } = require('rcon-client');
 const pidusage = require('pidusage');
+const https = require('https');
 
 // ---------------------------------------------------------------------------
 // Paths (all relative to manager/ dir so the project stays portable)
 // ---------------------------------------------------------------------------
 const SERVER_ROOT = path.resolve(__dirname, '../');
 const BOT_DIR     = path.resolve(__dirname, '../mc-bot');
-const SERVER_PROPERTIES_PATH = path.join(SERVER_ROOT, 'server.properties');
+const SERVER_DIR   = path.join(SERVER_ROOT, 'server');
+const SERVER_PROPERTIES_PATH = path.join(SERVER_DIR, 'server.properties');
 const BOT_ENV_PATH   = path.join(BOT_DIR,    '.env');
 const START_BAT_PATH = path.join(SERVER_ROOT, 'start.bat');
 const SERVER_PID_PATH = path.join(__dirname, '.server.pid');
 const BOT_PID_PATH    = path.join(__dirname, '.bot.pid');
-const SERVER_LOG_PATH = path.join(SERVER_ROOT, 'logs', 'latest.log');
+const SERVER_LOG_PATH = path.join(SERVER_DIR, 'logs', 'latest.log');
 const BOT_LOG_PATH    = path.join(BOT_DIR,    'bot.log');
+const SETUP_LOCK_PATH = path.join(__dirname, '.setup-complete');
 
 // ---------------------------------------------------------------------------
 // State
@@ -96,6 +99,172 @@ function updatePropertiesFile(filePath, updates) {
   fs.writeFileSync(filePath, newLines.join('\r\n'), 'utf8');
 }
 
+// ===========================================================================
+// Auto-Setup Functions
+// ===========================================================================
+
+/** Check if all prerequisites are installed */
+async function checkPrerequisites() {
+  const checks = {
+    node: false,
+    java: false,
+    serverJar: false,
+    dependencies: false
+  };
+
+  // Check Node.js
+  try {
+    execSync('node -v', { encoding: 'utf8' });
+    checks.node = true;
+  } catch (_) {}
+
+  // Check Java 25+
+  try {
+    const output = execSync('java -version 2>&1', { encoding: 'utf8' });
+    checks.java = output.includes('version "25') || output.includes('version "26');
+  } catch (_) {}
+
+  // Check server.jar
+  checks.serverJar = fs.existsSync(path.join(SERVER_DIR, 'server.jar'));
+
+  // Check npm dependencies
+  checks.dependencies = fs.existsSync(path.join(__dirname, 'node_modules')) &&
+                       fs.existsSync(path.join(BOT_DIR, 'node_modules'));
+
+  return checks;
+}
+
+/** Download a file from URL */
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    https.get(url, (response) => {
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve(true);
+      });
+    }).on('error', (err) => {
+      fs.unlink(dest, () => {});
+      reject(err);
+    });
+  });
+}
+
+/** Auto-setup the server */
+async function autoSetupServer() {
+  const setupSteps = [];
+
+  // Create server directory
+  if (!fs.existsSync(SERVER_DIR)) {
+    fs.mkdirSync(SERVER_DIR, { recursive: true });
+    setupSteps.push('Created server directory');
+  }
+
+  // Create eula.txt
+  if (!fs.existsSync(path.join(SERVER_DIR, 'eula.txt'))) {
+    fs.writeFileSync(path.join(SERVER_DIR, 'eula.txt'), 'eula=true', 'utf8');
+    setupSteps.push('Created eula.txt');
+  }
+
+  // Create server.properties
+  if (!fs.existsSync(SERVER_PROPERTIES_PATH)) {
+    const defaultProps = `server-port=25565
+enable-rcon=true
+rcon.port=25575
+rcon.password=change-this-password
+gamemode=survival
+difficulty=normal
+max-players=20
+view-distance=10
+simulation-distance=10
+motd=A Shadow MC Host Server
+online-mode=false
+level-name=world
+level-type=minecraft:normal`;
+    fs.writeFileSync(SERVER_PROPERTIES_PATH, defaultProps, 'utf8');
+    setupSteps.push('Created server.properties');
+  }
+
+  // Download PaperMC if missing
+  if (!fs.existsSync(path.join(SERVER_DIR, 'server.jar'))) {
+    try {
+      const paperUrl = 'https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds/191/downloads/paper-1.21.4-191.jar';
+      const tempJar = path.join(SERVER_DIR, 'paper-temp.jar');
+      await downloadFile(paperUrl, tempJar);
+      fs.renameSync(tempJar, path.join(SERVER_DIR, 'server.jar'));
+      setupSteps.push('Downloaded PaperMC server');
+    } catch (e) {
+      console.error('Failed to download PaperMC:', e.message);
+      setupSteps.push('ERROR: Failed to download PaperMC - manual download required');
+    }
+  }
+
+  // Create .env for bot
+  if (!fs.existsSync(BOT_ENV_PATH)) {
+    const envContent = `# Discord Bot Configuration
+TOKEN=your-bot-token-here
+GUILD_ID=your-server-id-here
+CLIENT_ID=your-application-id-here
+SERVER_PATH=../server
+SERVER_JAR=server.jar
+JAVA_PATH=java
+RCON_HOST=127.0.0.1
+RCON_PORT=25575
+RCON_PASSWORD=change-this-local-password`;
+    fs.writeFileSync(BOT_ENV_PATH, envContent, 'utf8');
+    setupSteps.push('Created bot .env file');
+  }
+
+  // Update servers.json
+  updateServersConfig();
+  setupSteps.push('Updated server configuration');
+
+  return setupSteps;
+}
+
+/** Update servers.json with correct paths */
+function updateServersConfig() {
+  const configPath = path.join(__dirname, 'servers.json');
+  const defaultConfig = {
+    servers: {
+      default: {
+        name: 'Main Server',
+        rootPath: '../server',
+        botDir: '../mc-bot',
+        serverJar: 'server.jar',
+        javaPath: null,
+        rconHost: '127.0.0.1',
+        rconPort: 25575,
+        rconPassword: '',
+        autoStart: false,
+        maxRam: '4G',
+        notes: 'Primary Minecraft server'
+      }
+    },
+    settings: {
+      defaultServer: 'default',
+      showTerminal: false,
+      closeToTray: true,
+      autoStartDefaultServer: false,
+      autoStartDefaultBot: false
+    }
+  };
+
+  if (!fs.existsSync(configPath)) {
+    fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+  } else {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (!config.servers.default.rootPath.includes('server')) {
+        config.servers.default.rootPath = '../server';
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+      }
+    } catch (_) {
+      fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+    }
+  }
+}
 
 // ===========================================================================
 // Server Configuration Helpers (Multi-Server Support)
@@ -114,7 +283,7 @@ function loadServersConfig() {
     servers: {
       default: {
         name: 'Default Server',
-        rootPath: '..',
+        rootPath: '../server',
         botDir: '../mc-bot',
         serverJar: 'server.jar',
         javaPath: null,
@@ -122,7 +291,7 @@ function loadServersConfig() {
         rconPort: 25575,
         rconPassword: '',
         autoStart: false,
-        maxRam: '10G',
+        maxRam: '4G',
         notes: 'Primary server'
       }
     },
@@ -192,7 +361,7 @@ function readConfig() {
     motd: '',
     rconPassword: '',
     discordToken: '',
-    maxRam: '10G'
+    maxRam: '4G'
   };
 
   // server.properties
@@ -247,7 +416,7 @@ function getConfiguredServerRamMB() {
   return ramToMB(readConfig().maxRam);
 }
 
-/** Encode a MOTD string for server.properties (non-ASCII → \uXXXX, newline → \n) */
+/** Encode a MOTD string for server.properties (non-ASCII => \uXXXX, newline => \n) */
 function encodeMotd(motd) {
   let out = '';
   for (let i = 0; i < motd.length; i++) {
@@ -279,7 +448,7 @@ function resolveExecutable(name) {
 
 /**
  * Resolve java executable.
- * Priority: JAVA_HOME env var → JAVA_PATH in .env → absolute path via `where`
+ * Priority: JAVA_HOME env var => JAVA_PATH in .env => absolute path via `where`
  */
 function getJavaPath() {
   if (process.env.JAVA_HOME) {
@@ -507,6 +676,16 @@ function scheduleRconConnect(delayMs = 15000) {
       } catch (_) {}
     }
 
+    // Also check server.properties for RCON settings
+    if (fs.existsSync(SERVER_PROPERTIES_PATH)) {
+      try {
+        const props = parseProperties(fs.readFileSync(SERVER_PROPERTIES_PATH, 'utf8'));
+        if (!password) password = props['rcon.password'] || '';
+        if (port === 25575) port = parseInt(props['rcon.port'] || '25575', 10);
+        if (host === '127.0.0.1') host = props['server-ip'] || '127.0.0.1';
+      } catch (_) {}
+    }
+
     // Tear down old client
     if (rcon) {
       try { await rcon.end(); } catch (_) {}
@@ -527,7 +706,7 @@ function scheduleRconConnect(delayMs = 15000) {
       });
 
       await rcon.connect();          // throws if server not ready
-      rconConnected = true;          // ← set HERE, after successful connect
+      rconConnected = true;          // => set HERE, after successful connect
       rconRetryCount = 0;
       console.log(`RCON connected to ${host}:${port}`);
 
@@ -552,33 +731,35 @@ function scheduleRconConnect(delayMs = 15000) {
 
 /** Extract args from start.bat java line; returns string[] without 'java' */
 function getServerArgs() {
-  if (fs.existsSync(START_BAT_PATH)) {
-    try {
-      const content = fs.readFileSync(START_BAT_PATH, 'utf8');
-      for (let line of content.split(/\r?\n/)) {
-        line = line.trim();
-        if (line.toLowerCase().startsWith('java ') || line.toLowerCase().startsWith('"java"')) {
-          // tokenise respecting quoted strings
-          const tokens = line.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-          tokens.shift(); // drop 'java'
-          return tokens;
-        }
-      }
-    } catch (_) {}
-  }
-  // Aikar's flags fallback
+  const config = loadServersConfig();
+  const serverConfig = config.servers[config.settings.defaultServer] || config.servers.default;
+  const maxRam = serverConfig.maxRam || '4G';
+  
   return [
-    '-Xms10G', '-Xmx10G',
-    '-XX:+UseG1GC', '-XX:+ParallelRefProcEnabled', '-XX:MaxGCPauseMillis=200',
-    '-XX:+UnlockExperimentalVMOptions', '-XX:+DisableExplicitGC',
-    '-XX:G1NewSizePercent=30', '-XX:G1MaxNewSizePercent=40',
-    '-XX:G1HeapRegionSize=8M', '-XX:G1ReservePercent=20',
-    '-XX:G1HeapWastePercent=5', '-XX:G1MixedGCCountTarget=4',
-    '-XX:InitiatingHeapOccupancyPercent=15', '-XX:G1MixedGCLiveThresholdPercent=90',
-    '-XX:G1RSetUpdatingPauseTimePercent=5', '-XX:SurvivorRatio=32',
-    '-XX:+PerfDisableSharedMem', '-XX:MaxTenuringThreshold=1',
-    '-Dusing.aikars.flags=https://mcflags.emc.gs', '-Daikars.new.flags=true',
-    '-jar', 'server.jar', 'nogui'
+    `-Xms${maxRam}`,
+    `-Xmx${maxRam}`,
+    '-XX:+UseG1GC',
+    '-XX:+ParallelRefProcEnabled',
+    '-XX:MaxGCPauseMillis=200',
+    '-XX:+UnlockExperimentalVMOptions',
+    '-XX:+DisableExplicitGC',
+    '-XX:G1NewSizePercent=30',
+    '-XX:G1MaxNewSizePercent=40',
+    '-XX:G1HeapRegionSize=8M',
+    '-XX:G1ReservePercent=20',
+    '-XX:G1HeapWastePercent=5',
+    '-XX:G1MixedGCCountTarget=4',
+    '-XX:InitiatingHeapOccupancyPercent=15',
+    '-XX:G1MixedGCLiveThresholdPercent=90',
+    '-XX:G1RSetUpdatingPauseTimePercent=5',
+    '-XX:SurvivorRatio=32',
+    '-XX:+PerfDisableSharedMem',
+    '-XX:MaxTenuringThreshold=1',
+    '-Dusing.aikars.flags=https://mcflags.emc.gs',
+    '-Daikars.new.flags=true',
+    '-jar',
+    serverConfig.serverJar || 'server.jar',
+    'nogui'
   ];
 }
 
@@ -641,6 +822,16 @@ async function updateTrayMenu() {
       enabled: botState === 'online',
       click: async () => {
         await stopBotProcess();
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Auto-Setup Server',
+      click: async () => {
+        send('server-log', '[System] Running auto-setup...');
+        const steps = await autoSetupServer();
+        steps.forEach(step => send('server-log', `[Setup] ${step}`));
+        send('server-log', '[System] Auto-setup complete!');
       }
     },
     { type: 'separator' },
@@ -732,6 +923,16 @@ app.whenReady().then(async () => {
 
   const managerSettings = readManagerSettings();
 
+  // Run auto-setup on first launch
+  if (!fs.existsSync(SETUP_LOCK_PATH)) {
+    console.log('[First Launch] Running auto-setup...');
+    send('server-log', '[System] First launch detected - running auto-setup...');
+    const steps = await autoSetupServer();
+    steps.forEach(step => send('server-log', `[Setup] ${step}`));
+    send('server-log', '[System] Auto-setup complete!');
+    fs.writeFileSync(SETUP_LOCK_PATH, 'setup completed at ' + new Date().toISOString(), 'utf8');
+  }
+
   // Detect already-running server
   const savedPid = readPid(SERVER_PID_PATH);
   if (savedPid) {
@@ -795,13 +996,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('read-manager-settings', () => readManagerSettings());
-ipcMain.handle('save-manager-settings', (_, settings) => {
-  const ok = saveManagerSettings(settings);
-  return { success: ok };
-})
 // ===========================================================================
-// Server Profile Management (Multi-Server Support)
+// IPC handlers - Server Profile Management (Multi-Server Support)
 // ===========================================================================
 
 ipcMain.handle('get-server-profiles', () => {
@@ -868,7 +1064,51 @@ ipcMain.handle('remove-server-profile', (_, serverId) => {
   }
 });
 
-;
+// ===========================================================================
+// IPC handlers - Manager Settings
+// ===========================================================================
+
+ipcMain.handle('read-manager-settings', () => readManagerSettings());
+ipcMain.handle('save-manager-settings', (_, settings) => {
+  const ok = saveManagerSettings(settings);
+  return { success: ok };
+});
+
+// ===========================================================================
+// IPC handlers - Auto-Setup
+// ===========================================================================
+
+ipcMain.handle('run-auto-setup', async () => {
+  try {
+    const steps = await autoSetupServer();
+    return { success: true, steps };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('check-prerequisites', async () => {
+  try {
+    const checks = await checkPrerequisites();
+    return { success: true, checks };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('download-papermc', async (_, version = '1.21.4', build = '191') => {
+  try {
+    const url = `https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${build}/downloads/paper-${version}-${build}.jar`;
+    const dest = path.join(SERVER_DIR, 'server.jar');
+    const tempDest = path.join(SERVER_DIR, `paper-${version}-${build}.jar`);
+    
+    await downloadFile(url, tempDest);
+    fs.renameSync(tempDest, dest);
+    return { success: true, message: 'PaperMC downloaded successfully' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
 
 // ===========================================================================
 // Fallback Server Detection Methods
@@ -914,7 +1154,7 @@ function tryProcessSearch() {
       if (err || !stdout) return resolve(null);
       const lines = stdout.split('\n');
       for (const line of lines) {
-        if (line.includes(SERVER_ROOT)) {
+        if (line.includes(SERVER_DIR)) {
           // Parse CSV line: "processid","commandline" or just look for numbers
           const parts = line.split(',');
           for (const part of parts) {
@@ -975,7 +1215,7 @@ async function detectServerStatus() {
 // IPC handlers
 // ===========================================================================
 
-// ── 1. get-status ──────────────────────────────────────────────────────────
+// 1. get-status
 ipcMain.handle('get-status', async () => {
   const status = {
     server:        'offline',
@@ -992,7 +1232,7 @@ ipcMain.handle('get-status', async () => {
   };
 
   // ops.json
-  const opsPath = path.join(SERVER_ROOT, 'ops.json');
+  const opsPath = path.join(SERVER_DIR, 'ops.json');
   if (fs.existsSync(opsPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(opsPath, 'utf8'));
@@ -1029,9 +1269,8 @@ ipcMain.handle('get-status', async () => {
       status.serverRam = await getPidRamMB(detected.pid);
       // Try to get uptime from log file if PID is recent
       try {
-        const logPath = path.join(SERVER_ROOT, 'logs', 'latest.log');
-        if (fs.existsSync(logPath)) {
-          const stat = fs.statSync(logPath);
+        if (fs.existsSync(SERVER_LOG_PATH)) {
+          const stat = fs.statSync(SERVER_LOG_PATH);
           status.serverUptime = Date.now() - stat.mtimeMs;
         }
       } catch (_) {}
@@ -1067,9 +1306,12 @@ async function startServerProcess() {
     const javaExe = getJavaPath();
     const args    = getServerArgs();
     const managerSettings = readManagerSettings();
+    const config = loadServersConfig();
+    const serverConfig = config.servers[config.settings.defaultServer] || config.servers.default;
+    const serverRoot = path.resolve(__dirname, serverConfig.rootPath || '../server');
 
     const child = spawn(javaExe, args, {
-      cwd:      SERVER_ROOT,
+      cwd:      serverRoot,
       detached: true,
       shell:    false,
       stdio:    'ignore',
@@ -1191,26 +1433,26 @@ async function stopBotProcess() {
   return { success: true };
 }
 
-// ── 2a. start-server ───────────────────────────────────────────────────────
+// 2a. start-server
 ipcMain.handle('start-server', () => startServerProcess());
 
-// ── 2b. stop-server ────────────────────────────────────────────────────────
+// 2b. stop-server
 ipcMain.handle('stop-server', () => stopServerProcess());
 
-// ── 2c. restart-server ─────────────────────────────────────────────────────
+// 2c. restart-server
 ipcMain.handle('restart-server', async () => {
   await stopServerProcess();
   await new Promise(r => setTimeout(r, 2000));
   return await startServerProcess();
 });
 
-// ── 2d. start-bot ──────────────────────────────────────────────────────────
+// 2d. start-bot
 ipcMain.handle('start-bot', () => startBotProcess());
 
-// ── 2e. stop-bot ───────────────────────────────────────────────────────────
+// 2e. stop-bot
 ipcMain.handle('stop-bot', () => stopBotProcess());
 
-// ── 3. RCON command execution ───────────────────────────────────────────────
+// 3. RCON command execution
 ipcMain.handle('send-server-command', async (_, command) => {
   if (!rconConnected || !rcon) {
     return { success: false, error: 'RCON is not connected. Wait for the server to finish starting.' };
@@ -1234,7 +1476,7 @@ ipcMain.handle('send-server-command', async (_, command) => {
   }
 });
 
-// ── 4. Settings read / write ────────────────────────────────────────────────
+// 4. Settings read / write
 ipcMain.handle('read-settings', () => {
   try {
     const config = readConfig();
@@ -1285,10 +1527,10 @@ ipcMain.handle('save-settings', (_, settings) => {
   }
 });
 
-// ── 5. Danger zone ──────────────────────────────────────────────────────────
+// 5. Danger zone
 ipcMain.handle('danger-reset-whitelist', async () => {
   try {
-    fs.writeFileSync(path.join(SERVER_ROOT, 'whitelist.json'), '[]', 'utf8');
+    fs.writeFileSync(path.join(SERVER_DIR, 'whitelist.json'), '[]', 'utf8');
     if (rconConnected && rcon) {
       await sendRconCommand('whitelist reload');
       return { success: true, message: 'Whitelist reset and reloaded via RCON.' };
@@ -1300,7 +1542,7 @@ ipcMain.handle('danger-reset-whitelist', async () => {
 });
 
 ipcMain.handle('danger-open-folder', () => {
-  shell.openPath(SERVER_ROOT);
+  shell.openPath(SERVER_DIR);
   return { success: true };
 });
 
@@ -1312,12 +1554,12 @@ ipcMain.handle('danger-open-logs', () => {
   return { success: true };
 });
 
-// ── 6. Console history ──────────────────────────────────────────────────────
+// 6. Console history
 ipcMain.handle('get-console-history', (_, type) => {
   return readLastLines(type === 'server' ? SERVER_LOG_PATH : BOT_LOG_PATH, 100);
 });
 
-// ── 7. Bot command tracking (called from renderer via preload) ───────────────
+// 7. Bot command tracking (called from renderer via preload)
 ipcMain.on('register-bot-command', (_, cmd) => {
   lastCommand = cmd;
   send('last-command-update', { command: lastCommand });

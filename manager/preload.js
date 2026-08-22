@@ -37,18 +37,10 @@ contextBridge.exposeInMainWorld('api', {
   addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
   removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
 
-
-  // Server profiles
-  getServerProfiles:   ()         => ipcRenderer.invoke('get-server-profiles'),
-  getActiveServerId:   ()         => ipcRenderer.invoke('get-active-server-id'),
-  setActiveServer:     (serverId) => ipcRenderer.invoke('set-active-server', serverId),
-  addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
-  removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
-
-  // Bot command tracking (renderer → main)
+  // Bot command tracking (renderer -> main)
   registerBotCommand: (cmd) => ipcRenderer.send('register-bot-command', cmd),
 
-  // Push listeners (main → renderer)
+  // Push listeners (main -> renderer)
   onServerLog: (cb) => {
     const fn = (_, line) => cb(line);
     ipcRenderer.on('server-log', fn);

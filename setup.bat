@@ -14,8 +14,8 @@ echo       SHADOW MC HOST SETUP
 echo ================================
 echo.
 echo This script checks everything needed,
- echo installs missing tools automatically,
- echo and gets the server ready to start.
+echo installs missing tools automatically,
+echo and gets the server ready to start.
 echo.
 
 :: ---------------------------
