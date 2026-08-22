@@ -1,223 +1,150 @@
-# SHADOW MC HOST - Setup Guide
+# SHADOW MC HOST Setup Guide
 
-> Complete setup instructions for both the Desktop Manager and Discord Bot
-
----
-
-## 📋 Quick Start Checklist
-
-- [ ] Install [Node.js 18+](https://nodejs.org/)
-- [ ] Install [Java 17+](https://adoptium.net/) (for Minecraft server)
-- [ ] Download [PaperMC server](https://papermc.io/downloads)
-- [ ] Clone this repository
-- [ ] Configure your server
-- [ ] Set up Discord bot (optional)
-- [ ] Launch SHADOW MC HOST
+This project has a Minecraft server, a desktop manager, and an optional Discord bot. The easiest way is to run the setup script once and let it check everything for you.
 
 ---
 
-## 🖥️ Desktop Manager Setup
+## The easiest way: one-click setup
 
-### 1. Clone the Repository
+1. Open a terminal in the project folder.
+2. Run:
 
-```bash
-# Using HTTPS
-git clone https://github.com/SHADOW-MC-HOST/SHADOW-MC-HOST.git
-cd SHADOW-MC-HOST
-
-# Or using SSH
-git clone git@github.com:SHADOW-MC-HOST/SHADOW-MC-HOST.git
-cd SHADOW-MC-HOST
+```bat
+setup.bat
 ```
 
-### 2. Install Dependencies
+3. The script will:
+   - check whether Node.js is installed
+   - install Node.js if it is missing
+   - check whether Git is installed
+   - install Git if it is missing
+   - check Java
+   - install Java 25 if it is missing
+   - install the manager and bot dependencies
+   - check whether the server JAR exists
+   - create a basic bot config if needed
+   - tell you the next startup steps
 
-```bash
-cd manager
-npm install
-```
+> Important: Paper 26.2 requires Java 25 or newer. If Java 21 is installed, it will not start correctly.
 
-This installs all required Electron and Node.js dependencies.
+---
 
-### 3. Prepare Your Minecraft Server
+## Files you should have in the main folder
 
-#### Option A: Use Existing Server
+Your project should look roughly like this:
 
-Place your existing PaperMC/Spigot server files in a folder next to the `manager/` directory:
-
-```
+```text
 SHADOW-MC-HOST/
-├── manager/         # This is the desktop app
-├── server.jar       # Your PaperMC server JAR
-├── start.bat        # Your startup script
-├── server.properties
-├── eula.txt
-└── ...             # Other server files
+├── setup.bat
+├── start.bat
+├── start-manager.bat
+├── start-bot.bat
+├── server/
+│   ├── server.jar
+│   ├── eula.txt
+│   ├── server.properties
+│   └── ...
+├── manager/
+│   ├── package.json
+│   └── ...
+├── mc-bot/
+│   ├── .env
+│   ├── package.json
+│   └── ...
+└── ...
 ```
-
-#### Option B: Create New Server
-
-1. Download PaperMC from [papermc.io/downloads](https://papermc.io/downloads)
-2. Create a folder for your server (e.g., `server/`)
-3. Place `server.jar` in the folder
-4. Create `start.bat` with recommended JVM flags:
-
-```batch
-@echo off
-java -Xms2G -Xmx4G \
-  -XX:+UseG1GC \
-  -XX:+ParallelRefProcEnabled \
-  -XX:MaxGCPauseMillis=200 \
-  -XX:+UnlockExperimentalVMOptions \
-  -XX:+DisableExplicitGC \
-  -XX:G1NewSizePercent=30 \
-  -XX:G1MaxNewSizePercent=40 \
-  -XX:G1HeapRegionSize=8M \
-  -XX:G1ReservePercent=20 \
-  -XX:G1HeapWastePercent=5 \
-  -XX:G1MixedGCCountTarget=4 \
-  -XX:InitiatingHeapOccupancyPercent=15 \
-  -XX:G1MixedGCLiveThresholdPercent=90 \
-  -XX:G1RSetUpdatingPauseTimePercent=5 \
-  -XX:SurvivorRatio=32 \
-  -XX:+PerfDisableSharedMem \
-  -XX:MaxTenuringThreshold=1 \
-  -Dusing.aikars.flags=https://mcflags.emc.gs \
-  -Daikars.new.flags=true \
-  -jar server.jar nogui
-pause
-```
-
-5. Run the server once to generate `eula.txt` and accept the EULA
-
-### 4. Configure Server Properties
-
-Edit `server.properties` and enable RCON:
-
-```properties
-# Required for SHADOW MC HOST to control the server
-enable-rcon=true
-rcon.password=your-strong-password-here
-rcon.port=25575
-
-# Recommended settings
-server-port=25565
-max-players=20
-view-distance=10
-gamemode=survival
-difficulty=normal
-```
-
-> ⚠️ **IMPORTANT**: Use a strong RCON password (16+ characters, mixed case, numbers, symbols)
-
-### 5. Configure SHADOW MC HOST
-
-Edit `manager/servers.json` to match your server setup:
-
-```json
-{
-  "servers": {
-    "default": {
-      "name": "My Minecraft Server",
-      "rootPath": "..",
-      "botDir": "../mc-bot",
-      "serverJar": "server.jar",
-      "javaPath": null,
-      "rconHost": "127.0.0.1",
-      "rconPort": 25575,
-      "rconPassword": "",
-      "autoStart": false,
-      "maxRam": "10G",
-      "notes": "Primary survival server"
-    }
-  },
-  "settings": {
-    "defaultServer": "default",
-    "showTerminal": false,
-    "closeToTray": true,
-    "autoStartDefaultServer": false,
-    "autoStartDefaultBot": false
-  }
-}
-```
-
-**Key fields:**
-- `rootPath`: Path to your server directory (relative to `manager/`)
-- `botDir`: Path to Discord bot directory (relative to `manager/`)
-- `rconPassword`: Your RCON password (optional, can also be in server.properties)
-- `maxRam`: Maximum RAM allocation (e.g., `10G`, `4096M`)
-
-### 6. Launch the Manager
-
-```bash
-cd manager
-npm start
-```
-
-The desktop application will launch and auto-detect your server configuration.
 
 ---
 
-## 🤖 Discord Bot Setup (Optional)
+## Start the server
 
-The Discord bot allows you to control your Minecraft server via Discord slash commands.
+If the setup script already ran successfully, start the Minecraft server with:
 
-### 1. Create Discord Application
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click **"New Application"**
-3. Give it a name (e.g., "SHADOW MC HOST Bot")
-4. Go to **Bot** → **Add Bot**
-5. Copy the **Bot Token** (keep this SECRET!)
-
-### 2. Get Guild ID
-
-1. Enable **Developer Mode** in Discord: User Settings → Advanced → Developer Mode
-2. Right-click your server name → **Copy ID**
-3. This is your **GUILD_ID**
-
-### 3. Invite Bot to Server
-
-Replace `CLIENT_ID` with your bot's Client ID (from Discord Developer Portal):
-
-```
-https://discord.com/oauth2/authorize?client_id=CLIENT_ID&permissions=274877941760&scope=bot%20applications.commands
+```bat
+start.bat
 ```
 
-Open this URL in your browser and add the bot to your server.
+This is the correct startup file for the project. It changes to the server folder, uses Java 25, and launches the Paper server.
 
-### 4. Configure Bot Environment
+---
 
-Create a file `mc-bot/.env` (this file should **NEVER** be committed to Git):
+## Start the desktop manager
 
+To open the Electron app:
+
+```bat
+start-manager.bat
 ```
-# Discord Bot Token (from Developer Portal)
-TOKEN=your-bot-token-here
 
-# Your Discord Server ID
-GUILD_ID=your-guild-id-here
+This runs the desktop manager from the manager folder.
 
-# Optional: Client ID (from Developer Portal)
-CLIENT_ID=your-client-id-here
+---
 
-# Server Configuration
+## Start the Discord bot
+
+If you want the Discord bot, first open the bot config file and replace the placeholder values:
+
+```text
+mc-bot/.env
+```
+
+Example:
+
+```env
+TOKEN=your-real-bot-token
+GUILD_ID=123456789012345678
+CLIENT_ID=123456789012345678
 SERVER_PATH=../
 SERVER_JAR=server.jar
-JAVA_PATH=java
-
-# RCON Configuration (optional - reads from server.properties by default)
+JAVA_PATH=C:\Program Files\Zulu\zulu-25\bin\java.exe
 RCON_HOST=127.0.0.1
 RCON_PORT=25575
-RCON_PASSWORD=your-rcon-password
+RCON_PASSWORD=change-this-local-password
 ```
 
-> ⚠️ **CRITICAL**: Add `.env` to your `.gitignore` to prevent accidentally committing your token!
+Then run:
 
-### 5. Install Bot Dependencies
+```bat
+start-bot.bat
+```
 
-```bash
-cd mc-bot
-npm install
+---
+
+## What the setup script checks
+
+The script checks these things automatically:
+
+- Node.js is installed
+- Git is installed
+- Java 25 is installed
+- the Paper server JAR is present in the server folder
+- the manager dependencies are installed
+- the bot dependencies are installed
+- the bot config file exists
+- the EULA file exists and is accepted
+
+If something is missing, it tries to install it for you.
+
+---
+
+## Important notes
+
+- PaperMC 26.2 needs Java 25 or newer.
+- The server should live in the server folder.
+- If the bot is not working, the most common issue is a missing or invalid Discord token.
+- If the server does not start, make sure the JAR in the server folder is the actual Paper server JAR.
+
+---
+
+## Quick repeat steps for a beginner
+
+1. Double-click setup.bat
+2. Wait for it to finish
+3. Double-click start.bat
+4. Double-click start-manager.bat
+5. If you want the bot, edit mc-bot/.env and then double-click start-bot.bat
+
+That is the easiest way to get everything working with no guesswork.
 ```
 
 ### 6. Deploy Slash Commands
