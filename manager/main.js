@@ -424,7 +424,7 @@ function encodeMotd(motd) {
     if (ch > 127) {
       out += '\\u' + ch.toString(16).toUpperCase().padStart(4, '0');
     } else if (motd[i] === '\n') {
-      out += '\\n';
+      out += '\n';
     } else {
       out += motd[i];
     }
@@ -1563,4 +1563,546 @@ ipcMain.handle('get-console-history', (_, type) => {
 ipcMain.on('register-bot-command', (_, cmd) => {
   lastCommand = cmd;
   send('last-command-update', { command: lastCommand });
+
+
+
+// ===========================================================================
+// MULTI-SERVER SUPPORT
+// ===========================================================================
+
+// Per-server state: serverId -> { pid, rcon, rconConnected, rconRetryCount, rconTimeoutId, ramPollId, logTailer, serverPort, rconPort, startTime, maxRam }
+const serverProcesses = new Map();
+
+/** Get server config by ID */
+function getServerConfig(serverId) {
+  const config = loadServersConfig();
+  return config.servers[serverId] || null;
+}
+
+/** Get all server IDs */
+function getAllServerIds() {
+  const config = loadServersConfig();
+  return Object.keys(config.servers);
+}
+
+/** Get active server ID */
+function getActiveServerId() {
+  const config = loadServersConfig();
+  return config.settings.defaultServer || 'default';
+}
+
+/** Set active server ID */
+function setActiveServerId(serverId) {
+  const config = loadServersConfig();
+  if (config.servers[serverId]) {
+    config.settings.defaultServer = serverId;
+    saveServersConfig(config);
+    return true;
+  }
+  return false;
+}
+
+/** Generate unique port numbers */
+function getNextPorts() {
+  const config = loadServersConfig();
+  const usedPorts = new Set();
+  const usedRconPorts = new Set();
+  for (const [id, server] of Object.entries(config.servers)) {
+    if (server.serverPort) usedPorts.add(server.serverPort);
+    if (server.rconPort) usedRconPorts.add(server.rconPort);
+  }
+  let serverPort = 25565;
+  while (usedPorts.has(serverPort)) serverPort++;
+  let rconPort = serverPort + 100;
+  while (usedRconPorts.has(rconPort) || usedPorts.has(rconPort)) rconPort++;
+  return { serverPort, rconPort };
+}
+
+/** Get PID file path for server */
+function getServerPidPath(serverId) {
+  return path.join(__dirname, `.server-pid-${serverId}`);
+}
+
+/** Get log path for server */
+function getServerLogPath(serverId) {
+  const server = getServerConfig(serverId);
+  if (server && server.rootPath) {
+    return path.join(path.resolve(__dirname, server.rootPath), 'logs', 'latest.log');
+  }
+  return SERVER_LOG_PATH;
+}
+
+/** Get properties path for server */
+function getServerPropertiesPath(serverId) {
+  const server = getServerConfig(serverId);
+  if (server && server.rootPath) {
+    return path.join(path.resolve(__dirname, server.rootPath), 'server.properties');
+  }
+  return SERVER_PROPERTIES_PATH;
+}
+
+/** Get server directory */
+function getServerDirectory(serverId) {
+  const server = getServerConfig(serverId);
+  if (server && server.rootPath) {
+    return path.resolve(__dirname, server.rootPath);
+  }
+  return SERVER_DIR;
+}
+
+/** Check if PID is running */
+function isServerPidRunning(pid, imageName) {
+  return new Promise(resolve => {
+    if (!pid || isNaN(pid)) return resolve(false);
+    exec(`tasklist /FI "PID eq ${pid}" /NH /FO CSV`, (err, stdout) => {
+      if (err) return resolve(false);
+      resolve(stdout.toLowerCase().includes(imageName.toLowerCase()));
+    });
+  });
+}
+
+/** Read PID from file */
+function readServerPid(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const n = parseInt(fs.readFileSync(filePath, 'utf8').trim(), 10);
+    return isNaN(n) ? null : n;
+  } catch (_) { return null; }
+}
+
+/** Get PID RAM in MB */
+async function getServerPidRamMB(pid) {
+  if (!pid || isNaN(pid)) return 0;
+  try {
+    const stats = await pidusage(pid);
+    return Math.round(stats.memory / 1024 / 1024);
+  } catch (_) { return 0; }
+}
+
+/** Convert RAM string to MB */
+function ramToMB(str) {
+  if (!str) return 0;
+  const m = String(str).trim().match(/^(\d+)([GgMm])$/);
+  if (!m) return 0;
+  return m[2].toUpperCase() === 'G' ? parseInt(m[1], 10) * 1024 : parseInt(m[1], 10);
+}
+
+/** Generate random password */
+function generateRandomPassword() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let password = '';
+  for (let i = 0; i < 16; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+}
+
+/** Generate random seed */
+function generateRandomSeed() {
+  return Math.floor(Math.random() * 9999999999).toString();
+}
+
+/** Get Java path for server */
+function getServerJavaPath(serverId = null) {
+  const server = serverId ? getServerConfig(serverId) : null;
+  if (server && server.javaPath) return server.javaPath;
+  if (process.env.JAVA_HOME) return path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
+  try {
+    const out = execSync('where java', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const lines = out.split(/\r?\n/).filter(Boolean);
+    if (lines.length > 0) return lines[0].trim();
+  } catch (e) {}
+  return 'java';
+}
+
+/** Start server by ID */
+async function startServerById(serverId) {
+  const server = getServerConfig(serverId);
+  if (!server) return { success: false, error: `Server profile '${serverId}' not found` };
+
+  const pidPath = getServerPidPath(serverId);
+  const existingPid = readServerPid(pidPath);
+  if (existingPid && await isServerPidRunning(existingPid, 'java.exe')) {
+    return { success: false, error: `Server '${serverId}' is already running` };
+  }
+
+  try {
+    const javaExe = getServerJavaPath(serverId);
+    const serverRoot = getServerDirectory(serverId);
+    const maxRam = server.maxRam || '4G';
+    const serverPort = server.serverPort || 25565;
+    const serverJar = server.serverJar || 'server.jar';
+
+    const args = [
+      `-Xms${maxRam}`, `-Xmx${maxRam}`,
+      '-XX:+UseG1GC', '-XX:+ParallelRefProcEnabled', '-XX:MaxGCPauseMillis=200',
+      '-XX:+UnlockExperimentalVMOptions', '-XX:+DisableExplicitGC',
+      '-XX:G1NewSizePercent=30', '-XX:G1MaxNewSizePercent=40',
+      '-XX:G1HeapRegionSize=8M', '-XX:G1ReservePercent=20',
+      '-XX:G1HeapWastePercent=5', '-XX:G1MixedGCCountTarget=4',
+      '-XX:InitiatingHeapOccupancyPercent=15', '-XX:G1MixedGCLiveThresholdPercent=90',
+      '-XX:G1RSetUpdatingPauseTimePercent=5', '-XX:SurvivorRatio=32',
+      '-XX:+PerfDisableSharedMem', '-XX:MaxTenuringThreshold=1',
+      '-Dusing.aikars.flags=https://mcflags.emc.gs', '-Daikars.new.flags=true',
+      '-jar', serverJar, 'nogui'
+    ];
+
+    const child = spawn(javaExe, args, {
+      cwd: serverRoot, detached: true, shell: false,
+      stdio: 'ignore', windowsHide: true
+    });
+    child.unref();
+    if (!child.pid) return { success: false, error: 'spawn() returned undefined PID' };
+
+    fs.writeFileSync(pidPath, String(child.pid), 'utf8');
+    serverProcesses.set(serverId, {
+      pid: child.pid, serverPort: serverPort,
+      rconPort: server.rconPort || 25575, rconPassword: server.rconPassword || '',
+      startTime: Date.now(), maxRam: maxRam
+    });
+    startServerRamPolling(serverId);
+    scheduleServerRconConnect(serverId);
+    await new Promise(r => setTimeout(r, 500));
+    const alive = await isServerPidRunning(child.pid, 'java.exe');
+    if (!alive) return { success: false, error: 'java process exited immediately' };
+    send('status-change', { type: 'server', serverId, state: 'starting' });
+    return { success: true, pid: child.pid, serverId };
+  } catch (e) {
+    send('spawn-error', { source: 'server', serverId, message: e.message });
+    return { success: false, error: e.message };
+  }
+}
+
+/** Stop server by ID */
+async function stopServerById(serverId) {
+  const server = getServerConfig(serverId);
+  if (!server) return { success: false, error: `Server profile '${serverId}' not found` };
+  const pidPath = getServerPidPath(serverId);
+  const sPid = readServerPid(pidPath);
+  if (!sPid || !(await isServerPidRunning(sPid, 'java.exe'))) {
+    try { fs.unlinkSync(pidPath); } catch (_) {}
+    return { success: false, error: `Server '${serverId}' is not running` };
+  }
+  const state = serverProcesses.get(serverId);
+  if (state && state.rcon && state.rconConnected) {
+    try { await state.rcon.send('stop'); await new Promise(r => setTimeout(r, 8000)); }
+    catch (e) { console.error(`RCON stop failed for ${serverId}:`, e.message); }
+  }
+  if (await isServerPidRunning(sPid, 'java.exe')) {
+    await new Promise(r => exec(`taskkill /PID ${sPid} /F /T`, r));
+  }
+  try { fs.unlinkSync(pidPath); } catch (_) {}
+  stopServerRamPolling(serverId); disconnectServerRcon(serverId);
+  serverProcesses.delete(serverId);
+  send('status-change', { type: 'server', serverId, state: 'offline' });
+  return { success: true, serverId };
+}
+
+/** Restart server by ID */
+async function restartServerById(serverId) {
+  await stopServerById(serverId);
+  await new Promise(r => setTimeout(r, 2000));
+  return startServerById(serverId);
+}
+
+/** Start RAM polling for server */
+function startServerRamPolling(serverId) {
+  const state = serverProcesses.get(serverId);
+  if (!state) return;
+  state.ramPollId = setInterval(async () => {
+    const sPid = readServerPid(getServerPidPath(serverId));
+    if (!sPid || !(await isServerPidRunning(sPid, 'java.exe'))) {
+      send('ram-update', { serverId, used: 0, total: ramToMB(state.maxRam || '4G') });
+      return;
+    }
+    const used = await getServerPidRamMB(sPid);
+    send('ram-update', { serverId, used, total: ramToMB(state.maxRam || '4G') });
+  }, 5000);
+}
+
+/** Stop RAM polling for server */
+function stopServerRamPolling(serverId) {
+  const state = serverProcesses.get(serverId);
+  if (state && state.ramPollId) {
+    clearInterval(state.ramPollId); state.ramPollId = null;
+  }
+  send('ram-update', { serverId, used: 0, total: 0 });
+}
+
+/** Schedule RCON connect for server */
+function scheduleServerRconConnect(serverId) {
+  const server = getServerConfig(serverId);
+  const state = serverProcesses.get(serverId);
+  if (!server || !state) return;
+  const rconPort = server.rconPort || 25575;
+  const rconPassword = server.rconPassword || '';
+  if (state.rconTimeoutId) { clearTimeout(state.rconTimeoutId); state.rconTimeoutId = null; }
+  state.rconTimeoutId = setTimeout(async () => {
+    if (!state) return; state.rconConnected = false;
+    if (state.rcon) { try { await state.rcon.end(); } catch (_) {} state.rcon = null; }
+    try {
+      const rcon = new Rcon({ host: '127.0.0.1', port: rconPort, password: rconPassword, timeout: 5000 });
+      rcon.on('end', () => { if (state) state.rconConnected = false; });
+      rcon.on('error', err => { if (state) state.rconConnected = false; });
+      await rcon.connect(); state.rcon = rcon; state.rconConnected = true;
+      state.rconRetryCount = 0; send('rcon-connected', { serverId, connected: true });
+    } catch (e) {
+      if (state) { state.rconConnected = false; state.rcon = null; }
+      state.rconRetryCount = (state.rconRetryCount || 0) + 1;
+      if (state && state.rconRetryCount < 20) scheduleServerRconConnect(serverId);
+      else send('rcon-connected', { serverId, connected: false, error: e.message });
+    }
+  }, 15000);
+}
+
+/** Disconnect RCON for server */
+function disconnectServerRcon(serverId) {
+  const state = serverProcesses.get(serverId);
+  if (state && state.rcon) { try { state.rcon.end(); } catch (_) {} state.rcon = null; }
+  if (state && state.rconTimeoutId) { clearTimeout(state.rconTimeoutId); state.rconTimeoutId = null; }
+  send('rcon-connected', { serverId, connected: false });
+}
+
+/** Send RCON command to server */
+async function sendRconCommandToServer(serverId, command) {
+  const state = serverProcesses.get(serverId);
+  if (!state || !state.rcon || !state.rconConnected) {
+    return { success: false, error: `RCON not connected for server ${serverId}` };
+  }
+  try {
+    let cmd = command.trim();
+    if (cmd.startsWith('/')) cmd = cmd.slice(1);
+    const response = await state.rcon.send(cmd);
+    return { success: true, response: response || '' };
+  } catch (e) { state.rconConnected = false; return { success: false, error: e.message };
+  }
+}
+
+/** Get server status */
+async function getServerStatus(serverId) {
+  const server = getServerConfig(serverId);
+  if (!server) return { success: false, error: `Server profile '${serverId}' not found` };
+  const pidPath = getServerPidPath(serverId);
+  const sPid = readServerPid(pidPath);
+  const state = serverProcesses.get(serverId);
+  const status = {
+    serverId: serverId, name: server.name, state: 'offline',
+    pid: null, ramUsed: 0, ramTotal: ramToMB(server.maxRam || '4G'),
+    uptime: 0, rconConnected: false,
+    serverPort: server.serverPort || 25565, rconPort: server.rconPort || 25575
+  };
+  if (sPid) {
+    const running = await isServerPidRunning(sPid, 'java.exe');
+    if (running) {
+      status.state = 'online'; status.pid = sPid; status.ramUsed = await getServerPidRamMB(sPid);
+      if (state && state.startTime) status.uptime = Date.now() - state.startTime;
+      else try { const st = fs.statSync(pidPath); status.uptime = Date.now() - st.mtimeMs; } catch (_) {}
+      status.rconConnected = state ? state.rconConnected || false : false;
+    } else try { fs.unlinkSync(pidPath); } catch (_) {}
+  }
+  return { success: true, status };
+}
+
+/** Get all servers status */
+async function getAllServersStatus() {
+  const serverIds = getAllServerIds();
+  const results = {};
+  for (const serverId of serverIds) {
+    const result = await getServerStatus(serverId);
+    if (result.success) results[serverId] = result.status;
+  }
+  return { success: true, servers: results };
+}
+
+/** Copy directory recursively */
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    else fs.copyFileSync(srcPath, destPath);
+  }
+}
+
+// ===========================================================================
+// MULTI-SERVER IPC HANDLERS
+// ===========================================================================
+
+ipcMain.handle('start-server-by-id', (_, serverId) => startServerById(serverId));
+ipcMain.handle('stop-server-by-id', (_, serverId) => stopServerById(serverId));
+ipcMain.handle('restart-server-by-id', (_, serverId) => restartServerById(serverId));
+ipcMain.handle('get-server-status', (_, serverId) => getServerStatus(serverId));
+ipcMain.handle('get-all-servers-status', () => getAllServersStatus());
+ipcMain.handle('send-rcon-command', (_, serverId, command) => sendRconCommandToServer(serverId, command));
+ipcMain.handle('get-active-server-id', () => ({ success: true, serverId: getActiveServerId() }));
+ipcMain.handle('set-active-server', (_, serverId) => ({ success: setActiveServerId(serverId), serverId }));
+ipcMain.handle('get-server-profiles', () => {
+  const config = loadServersConfig();
+  return { success: true, profiles: config.servers, active: config.settings.defaultServer };
+});
+ipcMain.handle('create-server', async (_, profile) => {
+  try {
+    const config = loadServersConfig();
+    const serverId = profile.id || `server-${Date.now()}`;
+    const ports = getNextPorts();
+    const dataDir = path.join(SERVER_ROOT, 'data', 'servers');
+    const serverDir = path.join(dataDir, serverId);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(serverDir)) {
+      fs.mkdirSync(serverDir, { recursive: true });
+      fs.mkdirSync(path.join(serverDir, 'plugins'), { recursive: true });
+      fs.mkdirSync(path.join(serverDir, 'world'), { recursive: true });
+      fs.mkdirSync(path.join(serverDir, 'logs'), { recursive: true });
+    }
+    const seed = profile.seed || generateRandomSeed();
+    const rconPassword = profile.rconPassword || generateRandomPassword();
+    const serverProfile = {
+      id: serverId, name: profile.name || serverId,
+      rootPath: serverDir, serverJar: 'server.jar', javaPath: null,
+      serverPort: ports.serverPort, rconHost: '127.0.0.1',
+      rconPort: ports.rconPort, rconPassword: rconPassword,
+      autoStart: profile.autoStart || false, maxRam: profile.maxRam || '4G',
+      notes: profile.notes || '', minecraftVersion: profile.minecraftVersion || '1.21.4',
+      seed: seed, gamemode: profile.gamemode || 'survival',
+      difficulty: profile.difficulty || 'normal', maxPlayers: profile.maxPlayers || 20,
+      viewDistance: profile.viewDistance || 10, levelName: profile.levelName || 'world',
+      createdAt: new Date().toISOString()
+    };
+    config.servers[serverId] = serverProfile;
+    if (!config.settings.defaultServer) config.settings.defaultServer = serverId;
+    saveServersConfig(config);
+    const props = {
+      'server-port': ports.serverPort, 'enable-rcon': 'true', 'rcon.port': ports.rconPort,
+      'rcon.password': rconPassword, 'gamemode': serverProfile.gamemode,
+      'difficulty': serverProfile.difficulty, 'max-players': serverProfile.maxPlayers,
+      'view-distance': serverProfile.viewDistance, 'motd': `Shadow MC Host - ${serverProfile.name}`,
+      'online-mode': 'false', 'level-name': serverProfile.levelName,
+      'level-type': 'minecraft:normal', 'level-seed': seed
+    };
+    fs.writeFileSync(path.join(serverDir, 'server.properties'),
+      Object.entries(props).map(([k, v]) => `${k}=${v}`).join('\n'), 'utf8');
+    fs.writeFileSync(path.join(serverDir, 'eula.txt'), 'eula=true', 'utf8');
+    return { success: true, profile: serverProfile };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('remove-server-profile', (_, serverId) => {
+  try {
+    const config = loadServersConfig();
+    if (!config.servers[serverId]) return { success: false, error: 'Server profile not found' };
+    stopServerById(serverId).catch(() => {});
+    delete config.servers[serverId];
+    if (config.settings.defaultServer === serverId) {
+      config.settings.defaultServer = Object.keys(config.servers)[0] || null;
+    }
+    saveServersConfig(config); return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => {
+  try {
+    const config = loadServersConfig();
+    const id = importServerId || `imported-${Date.now()}`;
+    const resolvedSource = path.resolve(sourcePath);
+    const dataDir = path.join(SERVER_ROOT, 'data', 'servers');
+    const serverDir = path.join(dataDir, id);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(resolvedSource)) {
+      return { success: false, error: `Source directory not found: ${resolvedSource}` };
+    }
+    const ports = getNextPorts();
+    let serverProps = {};
+    const propsPath = path.join(resolvedSource, 'server.properties');
+    if (fs.existsSync(propsPath)) {
+      const content = fs.readFileSync(propsPath, 'utf8');
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const idx = trimmed.indexOf('=');
+        if (idx > 0) serverProps[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
+      }
+    }
+    const rconPassword = serverProps['rcon.password'] || generateRandomPassword();
+    const seed = serverProps['level-seed'] || generateRandomSeed();
+    const serverProfile = {
+      id: id, name: path.basename(resolvedSource) || id, rootPath: serverDir,
+      serverJar: 'server.jar', javaPath: null,
+      serverPort: parseInt(serverProps['server-port']) || ports.serverPort,
+      rconHost: '127.0.0.1', rconPort: parseInt(serverProps['rcon.port']) || ports.rconPort,
+      rconPassword: rconPassword, autoStart: false, maxRam: '4G',
+      notes: `Imported from: ${sourcePath}`, minecraftVersion: '1.21.4',
+      seed: seed, gamemode: serverProps['gamemode'] || 'survival',
+      difficulty: serverProps['difficulty'] || 'normal',
+      maxPlayers: parseInt(serverProps['max-players']) || 20,
+      viewDistance: parseInt(serverProps['view-distance']) || 10,
+      levelName: serverProps['level-name'] || 'world', createdAt: new Date().toISOString()
+    };
+    config.servers[id] = serverProfile; saveServersConfig(config);
+    if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true });
+    const filesToCopy = ['server.jar', 'server.properties', 'eula.txt', 'bukkit.yml', 'spigot.yml', 'paper.yml'];
+    for (const file of filesToCopy) {
+      const src = path.join(resolvedSource, file);
+      const dest = path.join(serverDir, file);
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+    }
+    const pluginsSrc = path.join(resolvedSource, 'plugins');
+    const pluginsDest = path.join(serverDir, 'plugins');
+    if (fs.existsSync(pluginsSrc)) copyDirRecursive(pluginsSrc, pluginsDest);
+    const props = {
+      'server-port': serverProfile.serverPort, 'enable-rcon': 'true',
+      'rcon.port': serverProfile.rconPort, 'rcon.password': rconPassword, 'level-seed': seed
+    };
+    fs.writeFileSync(path.join(serverDir, 'server.properties'),
+      Object.entries(props).map(([k, v]) => `${k}=${v}`).join('\n'), 'utf8');
+    return { success: true, profile: serverProfile };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Override existing functions to use multi-server
+const originalStartServerProcess = startServerProcess;
+startServerProcess = async function() {
+  const activeId = getActiveServerId();
+  return startServerById(activeId);
+};
+const originalStopServerProcess = stopServerProcess;
+stopServerProcess = async function() {
+  const activeId = getActiveServerId();
+  return stopServerById(activeId);
+};
+const originalRestartServerProcess = restartServerProcess;
+restartServerProcess = async function() {
+  const activeId = getActiveServerId();
+  await stopServerById(activeId);
+  await new Promise(r => setTimeout(r, 2000));
+  return startServerById(activeId);
+};
+const originalGetStatus = ipcMain.handle('get-status');
+ipcMain.handle('get-status', async () => {
+  const result = await originalGetStatus();
+  const allStatus = await getAllServersStatus();
+  return { ...result, allServers: allStatus.servers };
+});
+const originalSendServerCommand = ipcMain.handle('send-server-command');
+ipcMain.handle('send-server-command', async (_, command) => {
+  const activeId = getActiveServerId();
+  return sendRconCommandToServer(activeId, command);
+});
+
+// Cleanup all servers on app quit
+const originalWindowAllClosed = app.on('window-all-closed', () => {});
+app.on('window-all-closed', () => {
+  const s = readManagerSettings();
+  if (s.closeToTray && !forceQuit) return;
+  const serverIds = [...serverProcesses.keys()];
+  for (const serverId of serverIds) stopServerById(serverId).catch(() => {});
+  activeTailers.forEach(t => t.stop()); activeTailers = [];
+  stopRamPolling(); stopBotRamPolling();
+  if (rconTimeoutId) clearTimeout(rconTimeoutId);
+  if (rcon) { try { rcon.end(); } catch (_) {} }
+  if (tray) { tray.destroy(); tray = null; }
+  if (process.platform !== 'darwin') app.quit();
+});
+
+
 });
