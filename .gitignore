@@ -1,4 +1,13 @@
-# OS generated files
+# ============================================================================
+# SHADOW MC HOST - Git Ignore Rules
+# ============================================================================
+# This file prevents personal data, runtime files, and generated content
+# from being committed to the repository.
+# ============================================================================
+
+# ============================================================================
+# OS GENERATED FILES
+# ============================================================================
 .DS_Store
 .DS_Store?
 ._*
@@ -7,57 +16,213 @@
 ehthumbs.db
 Thumbs.db
 
-# Node.js
+# Windows
+*.tmp
+*.temp
+*.swp
+*~
+$RECYCLE.BIN/
+
+# ============================================================================
+# NODE.JS
+# ============================================================================
 node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Electron
-.dist
-.build
+# ============================================================================
+# ELECTRON
+# ============================================================================
+.dist/
+.build/
+dist/
+build/
+*.exe
+*.dll
+*.lib
 
-# IDE
+# Electron cache
+.electron/
+
+# ============================================================================
+# IDE / EDITOR
+# ============================================================================
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
 
-# Logs
+# ============================================================================
+# LOGS
+# ============================================================================
 *.log
 logs/
+crash-reports/
 
-# Server data (keep these out of source control)
+# Server logs
+server/logs/
+server/crash-reports/
+server/*.log
+
+# ============================================================================
+# SERVER DATA - NEVER COMMIT THESE
+# ============================================================================
+# World data
 world/
 world_nether/
 world_the_end/
+
+# Player data
 playerdata/
 stats/
 advancements/
 usercache.json
+
+# Bans and permissions
 banned-ips.json
 banned-players.json
 ops.json
 whitelist.json
+
+# Server configuration (machine-specific)
+# Template files in repo are OK, but runtime configs with passwords should be external
+eula.txt
 server.properties
 paper.yml
 spigot.yml
 bukkit.yml
-eula.txt
 
-# PID files
-*.pid
+# Plugins directory (contains downloaded plugins)
+plugins/
 
-# Environment files (contain secrets)
+# ============================================================================
+# LIBRARIES (Minecraft server libraries - downloaded at runtime)
+# ============================================================================
+libraries/
+
+# ============================================================================
+# DATA SEPARATION - RUNTIME DATA OUTSIDE REPO
+# ============================================================================
+# The following paths should live outside the repository:
+# C:\ShadowMCHost\app\    - Application files
+# C:\ShadowMCHost\data\  - All server data
+#   \-- servers\          - Server instances
+#   \-- backups\          - Backup files
+#   \-- downloads\        - Downloaded files
+#   \-- logs\             - All logs
+
+# Ignore any accidentally committed data
+ShadowMCHost/
+
+# ============================================================================
+# ENVIRONMENT FILES (CONTAIN SECRETS)
+# ============================================================================
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 
-# Build output
+# Bot configuration
+mc-bot/.env
+mc-bot/.env.*
+
+# Manager configuration
+manager/.env
+manager/.env.*
+
+# ============================================================================
+# BUILD OUTPUT
+# ============================================================================
 dist/
 build/
+out/
 
-# Crash reports
-crash-reports/
-
-# Cache
+# ============================================================================
+# CACHE
+# ============================================================================
 .cache/
+.parcel-cache/
+
+# ============================================================================
+# DOWNLOADS
+# ============================================================================
+downloads/
+*.jar
+!server.jar  # Keep template server.jar in repo
+
+# ============================================================================
+# PID FILES
+# ============================================================================
+*.pid
+.server.pid
+.bot.pid
+
+# ============================================================================
+# TEMPORARY FILES
+# ============================================================================
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# ============================================================================
+# BACKUPS
+# ============================================================================
+backups/
+*.bak
+*.backup
+
+# ============================================================================
+# CREDENTIALS AND SECRETS
+# ============================================================================
+*.key
+*.pem
+*.crt
+*.cer
+*.pfx
+*.p12
+
+# RCON password files
+rcon-password.txt
+rcon-password.*
+
+# ============================================================================
+# MACHINE-SPECIFIC FILES
+# ============================================================================
+*.local
+*.config
+
+# ============================================================================
+# INSTALLATION FILES
+# ============================================================================
+launch-shadow.bat
+Shadow MC Host.lnk
+
+# ============================================================================
+# ELECTRON USER DATA
+# ============================================================================
+userData/
+partition/
+
+# ============================================================================
+# TEST FILES
+# ============================================================================
+.coverage/
+nyc_output/
+
+# ============================================================================
+# DOCUMENTATION GENERATED FILES
+# ============================================================================
+docs/api/
+docs/build/
+
+# ============================================================================
+# END OF .GITIGNORE
+# ============================================================================
