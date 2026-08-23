@@ -734,7 +734,14 @@ function getServerArgs() {
   const config = loadServersConfig();
   const serverConfig = config.servers[config.settings.defaultServer] || config.servers.default;
   const maxRam = serverConfig.maxRam || '4G';
-  
+  const activeId = config.settings.defaultServer;
+  // Resolve JAR: use configured, or auto-detect
+  let serverJar = serverConfig.serverJar || 'server.jar';
+  if (activeId) {
+    const jarRes = resolveServerJar(activeId);
+    if (jarRes.jar) serverJar = jarRes.jar;
+  }
+
   return [
     `-Xms${maxRam}`,
     `-Xmx${maxRam}`,
@@ -758,7 +765,7 @@ function getServerArgs() {
     '-Dusing.aikars.flags=https://mcflags.emc.gs',
     '-Daikars.new.flags=true',
     '-jar',
-    serverConfig.serverJar || 'server.jar',
+    serverJar,
     'nogui'
   ];
 }
@@ -1563,8 +1570,7 @@ ipcMain.handle('get-console-history', (_, type) => {
 ipcMain.on('register-bot-command', (_, cmd) => {
   lastCommand = cmd;
   send('last-command-update', { command: lastCommand });
-
-
+});
 
 // ===========================================================================
 // MULTI-SERVER SUPPORT
@@ -1731,7 +1737,22 @@ async function startServerById(serverId) {
     const serverRoot = getServerDirectory(serverId);
     const maxRam = server.maxRam || '4G';
     const serverPort = server.serverPort || 25565;
-    const serverJar = server.serverJar || 'server.jar';
+
+    // Resolve the server JAR: use configured, or auto-detect
+    const jarResolution = resolveServerJar(serverId);
+    let serverJar = server.serverJar || 'server.jar';
+    if (jarResolution.jar) {
+      serverJar = jarResolution.jar;
+    } else if (jarResolution.needsSelection) {
+      return {
+        success: false,
+        error: `Multiple JARs found in server directory. Please select one in the Servers panel.`,
+        needsJarSelection: true,
+        candidates: jarResolution.candidates
+      };
+    } else if (jarResolution.error) {
+      return { success: false, error: jarResolution.error };
+    }
 
     const args = [
       `-Xms${maxRam}`, `-Xmx${maxRam}`,
@@ -1937,20 +1958,18 @@ ipcMain.handle('restart-server-by-id', (_, serverId) => restartServerById(server
 ipcMain.handle('get-server-status', (_, serverId) => getServerStatus(serverId));
 ipcMain.handle('get-all-servers-status', () => getAllServersStatus());
 ipcMain.handle('send-rcon-command', (_, serverId, command) => sendRconCommandToServer(serverId, command));
-ipcMain.handle('get-active-server-id', () => ({ success: true, serverId: getActiveServerId() }));
-ipcMain.handle('set-active-server', (_, serverId) => ({ success: setActiveServerId(serverId), serverId }));
-ipcMain.handle('get-server-profiles', () => {
-  const config = loadServersConfig();
-  return { success: true, profiles: config.servers, active: config.settings.defaultServer };
-});
 ipcMain.handle('create-server', async (_, profile) => {
   try {
     const config = loadServersConfig();
     const serverId = profile.id || `server-${Date.now()}`;
     const ports = getNextPorts();
-    const dataDir = path.join(SERVER_ROOT, 'data', 'servers');
-    const serverDir = path.join(dataDir, serverId);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    // Use isolated directory outside the repo
+    const dataRoot = process.platform === 'win32'
+      ? 'C:\\ShadowMCHost'
+      : path.join(require('os').homedir(), '.shadowmchost');
+    const serversBase = path.join(dataRoot, 'servers');
+    const serverDir = path.join(serversBase, serverId);
+    if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
       fs.mkdirSync(path.join(serverDir, 'plugins'), { recursive: true });
@@ -2000,14 +2019,194 @@ ipcMain.handle('remove-server-profile', (_, serverId) => {
     saveServersConfig(config); return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
 });
+
+// ===========================================================================
+// PAPERMC API + DOWNLOAD MANAGER
+// ===========================================================================
+
+/** Fetch JSON from a URL */
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(fetchJson(res.headers.location));
+      }
+      if (res.statusCode !== 200) {
+        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      }
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(new Error('Invalid JSON response')); }
+      });
+    }).on('error', reject);
+  });
+}
+
+/** Download a file with progress reporting */
+function downloadFileWithProgress(url, dest, progressChannel, serverId) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    let received = 0;
+    let total = 0;
+    let lastReport = 0;
+
+    https.get(url, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        file.close();
+        try { fs.unlinkSync(dest); } catch (_) {}
+        return resolve(downloadFileWithProgress(res.headers.location, dest, progressChannel, serverId));
+      }
+      if (res.statusCode !== 200) {
+        file.close();
+        try { fs.unlinkSync(dest); } catch (_) {}
+        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+      }
+      total = parseInt(res.headers['content-length'] || '0', 10);
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        const now = Date.now();
+        if (progressChannel && (now - lastReport > 200 || received === total)) {
+          lastReport = now;
+          send(progressChannel, {
+            serverId,
+            received,
+            total,
+            percent: total > 0 ? Math.round(received / total * 100) : 0
+          });
+        }
+      });
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        if (progressChannel) send(progressChannel, { serverId, received: total, total, percent: 100 });
+        resolve(true);
+      });
+    }).on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync(dest); } catch (_) {}
+      reject(err);
+    });
+  });
+}
+
+/** Get available Paper versions from PaperMC API */
+async function getPaperVersions() {
+  const data = await fetchJson('https://papermc.io/api/v2/projects/paper');
+  return { versions: data.versions || [], versionGroups: data.version_groups || [] };
+}
+
+/** Get latest build for a Paper version */
+async function getPaperLatestBuild(version) {
+  const data = await fetchJson(`https://papermc.io/api/v2/projects/paper/versions/${version}`);
+  const builds = data.builds || [];
+  if (builds.length === 0) return null;
+  // Pick the latest build (highest number)
+  const latest = builds[builds.length - 1];
+  return { build: latest.build, download: latest.downloads && latest.downloads.application, version: version };
+}
+
+/** Download Paper JAR for a specific version into a directory */
+async function downloadPaperJar(version, destDir, jarName, progressChannel, serverId) {
+  const buildInfo = await getPaperLatestBuild(version);
+  if (!buildInfo || !buildInfo.download) {
+    throw new Error(`No Paper build found for version ${version}`);
+  }
+  const url = `https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${buildInfo.build}/downloads/${buildInfo.download.filename}`;
+  const finalJarName = jarName || `paper-${version}-${buildInfo.build}.jar`;
+  const dest = path.join(destDir, finalJarName);
+  await downloadFileWithProgress(url, dest, progressChannel, serverId);
+  return { jarName: finalJarName, build: buildInfo.build, version, path: dest };
+}
+
+// ===========================================================================
+// JAR DETECTION
+// ===========================================================================
+
+/** Plugin/mod jar name patterns to exclude */
+const PLUGIN_PATTERNS = [
+  /^ViaVersion/i, /^ViaBackwards/i, /^ViaRewind/i,
+  /^Vault/i, /^Essentials/i, /^LuckPerms/i, /^WorldEdit/i, /^WorldGuard/i,
+  /^PlaceholderAPI/i, /^ProtocolLib/i, /^CoreProtect/i, /^dynmap/i,
+  /^Multiverse/i, /^PermissionsEx/i, /^GroupManager/i, /^bStats/i
+];
+
+/** Check if a jar name looks like a plugin/mod rather than a server executable */
+function isPluginJar(fileName) {
+  const base = path.basename(fileName, '.jar').toLowerCase();
+  // Plugins are usually in plugins/ or mods/ dirs, but if found in root, check patterns
+  for (const p of PLUGIN_PATTERNS) {
+    if (p.test(base)) return true;
+  }
+  // Very small jars (< 1MB implied by name patterns) are likely plugins
+  return false;
+}
+
+/** Find suitable server JARs in a directory */
+function detectServerJars(dir) {
+  if (!fs.existsSync(dir)) return [];
+  const jars = [];
+  const pluginsDir = path.join(dir, 'plugins');
+  const modsDir = path.join(dir, 'mods');
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.toLowerCase().endsWith('.jar')) continue;
+      // Skip if it's clearly a plugin
+      if (isPluginJar(entry.name)) continue;
+      const fullPath = path.join(dir, entry.name);
+      const stat = fs.statSync(fullPath);
+      // Server JARs are typically > 20MB; plugins are usually < 5MB
+      if (stat.size < 5 * 1024 * 1024) continue;
+      jars.push({ name: entry.name, path: fullPath, sizeMB: Math.round(stat.size / 1024 / 1024) });
+    }
+  } catch (_) {}
+  // Sort by size descending — the largest jar is most likely the server
+  jars.sort((a, b) => b.sizeMB - a.sizeMB);
+  return jars;
+}
+
+/** Resolve the server JAR for a profile: use configured, or detect */
+function resolveServerJar(serverId) {
+  const server = getServerConfig(serverId);
+  if (!server) return { jar: null, error: 'Server profile not found' };
+  const serverDir = getServerDirectory(serverId);
+
+  // 1. If serverJar is configured and exists, use it
+  if (server.serverJar) {
+    const jarPath = path.isAbsolute(server.serverJar) ? server.serverJar : path.join(serverDir, server.serverJar);
+    if (fs.existsSync(jarPath)) {
+      return { jar: server.serverJar, absolutePath: jarPath };
+    }
+  }
+
+  // 2. Detect JARs in the server directory
+  const detected = detectServerJars(serverDir);
+  if (detected.length === 1) {
+    // Auto-select the only candidate
+    return { jar: detected[0].name, absolutePath: detected[0].path, autoDetected: true };
+  }
+  if (detected.length > 1) {
+    // Multiple candidates — don't guess, return list for user to choose
+    return { jar: null, candidates: detected, needsSelection: true };
+  }
+
+  // No JAR found
+  return { jar: null, error: 'No server JAR found in server directory' };
+}
+
 ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => {
   try {
     const config = loadServersConfig();
     const id = importServerId || `imported-${Date.now()}`;
     const resolvedSource = path.resolve(sourcePath);
-    const dataDir = path.join(SERVER_ROOT, 'data', 'servers');
-    const serverDir = path.join(dataDir, id);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    const dataRoot = process.platform === 'win32'
+      ? 'C:\\ShadowMCHost'
+      : path.join(require('os').homedir(), '.shadowmchost');
+    const serversBase = path.join(dataRoot, 'servers');
+    const serverDir = path.join(serversBase, id);
+    if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(resolvedSource)) {
       return { success: false, error: `Source directory not found: ${resolvedSource}` };
     }
@@ -2040,11 +2239,29 @@ ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => 
     };
     config.servers[id] = serverProfile; saveServersConfig(config);
     if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true });
-    const filesToCopy = ['server.jar', 'server.properties', 'eula.txt', 'bukkit.yml', 'spigot.yml', 'paper.yml'];
+    // Detect server JARs in source directory instead of assuming server.jar
+    const detectedJars = detectServerJars(resolvedSource);
+    let serverJarName = 'server.jar';
+    if (detectedJars.length === 1) {
+      serverJarName = detectedJars[0].name;
+    } else if (detectedJars.length > 1) {
+      // Pick the largest (most likely server) but note it in the profile
+      serverJarName = detectedJars[0].name;
+      serverProfile.notes += ` (Multiple JARs detected, using: ${serverJarName})`;
+    }
+    serverProfile.serverJar = serverJarName;
+    saveServersConfig(config);
+
+    const filesToCopy = ['server.properties', 'eula.txt', 'bukkit.yml', 'spigot.yml', 'paper.yml'];
     for (const file of filesToCopy) {
       const src = path.join(resolvedSource, file);
       const dest = path.join(serverDir, file);
       if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+    }
+    // Copy the detected server JAR
+    const srcJar = path.join(resolvedSource, serverJarName);
+    if (fs.existsSync(srcJar)) {
+      fs.copyFileSync(srcJar, path.join(serverDir, serverJarName));
     }
     const pluginsSrc = path.join(resolvedSource, 'plugins');
     const pluginsDest = path.join(serverDir, 'plugins');
@@ -2059,50 +2276,214 @@ ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => 
   } catch (e) { return { success: false, error: e.message }; }
 });
 
-// Override existing functions to use multi-server
-const originalStartServerProcess = startServerProcess;
+// ===========================================================================
+// PAPERMC + JAR DETECTION IPC HANDLERS
+// ===========================================================================
+
+ipcMain.handle('get-paper-versions', async () => {
+  try {
+    const result = await getPaperVersions();
+    return { success: true, ...result };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('download-paper-jar', async (_, version, destDir, jarName, serverId) => {
+  try {
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    const result = await downloadPaperJar(version, destDir, jarName, 'download-progress', serverId);
+    return { success: true, ...result };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('detect-server-jars', (_, dirPath) => {
+  try {
+    const resolved = path.resolve(dirPath);
+    const jars = detectServerJars(resolved);
+    return { success: true, jars };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('resolve-server-jar', (_, serverId) => {
+  try {
+    return { success: true, ...resolveServerJar(serverId) };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('set-server-jar', (_, serverId, jarName) => {
+  try {
+    const config = loadServersConfig();
+    if (!config.servers[serverId]) return { success: false, error: 'Server profile not found' };
+    config.servers[serverId].serverJar = jarName;
+    saveServersConfig(config);
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('create-server-with-download', async (_, profile) => {
+  try {
+    const config = loadServersConfig();
+    const serverId = profile.id || `server-${Date.now()}`;
+    if (config.servers[serverId]) return { success: false, error: 'Server ID already exists' };
+    const ports = getNextPorts();
+    const serverPort = profile.serverPort || ports.serverPort;
+    const rconPort = profile.rconPort || ports.rconPort;
+    const rconPassword = profile.rconPassword || generateRandomPassword();
+    const seed = profile.seed && profile.seed.trim() ? profile.seed.trim() : generateRandomSeed();
+    const maxRam = profile.maxRam || '4G';
+    const minecraftVersion = profile.minecraftVersion || '1.21.4';
+
+    // Create isolated server directory outside the repo
+    const dataRoot = process.platform === 'win32'
+      ? 'C:\\ShadowMCHost'
+      : path.join(require('os').homedir(), '.shadowmchost');
+    const serversBase = path.join(dataRoot, 'servers');
+    const serverDir = path.join(serversBase, serverId);
+    if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
+    if (fs.existsSync(serverDir)) {
+      return { success: false, error: 'Server directory already exists. Choose a different name.' };
+    }
+    fs.mkdirSync(serverDir, { recursive: true });
+    fs.mkdirSync(path.join(serverDir, 'plugins'), { recursive: true });
+    fs.mkdirSync(path.join(serverDir, 'logs'), { recursive: true });
+
+    // Download Paper JAR
+    let jarName = 'server.jar';
+    if (profile.serverSoftware !== 'import') {
+      const dlResult = await downloadPaperJar(minecraftVersion, serverDir, 'server.jar', 'download-progress', serverId);
+      jarName = dlResult.jarName;
+    }
+
+    const serverProfile = {
+      id: serverId,
+      name: profile.name || serverId,
+      rootPath: serverDir,
+      serverJar: jarName,
+      javaPath: null,
+      serverPort: serverPort,
+      rconHost: '127.0.0.1',
+      rconPort: rconPort,
+      rconPassword: rconPassword,
+      autoStart: profile.autoStart || false,
+      maxRam: maxRam,
+      notes: profile.notes || '',
+      minecraftVersion: minecraftVersion,
+      serverSoftware: profile.serverSoftware || 'paper',
+      seed: seed,
+      gamemode: profile.gamemode || 'survival',
+      difficulty: profile.difficulty || 'normal',
+      maxPlayers: profile.maxPlayers || 20,
+      viewDistance: profile.viewDistance || 10,
+      levelName: profile.levelName || 'world',
+      createdAt: new Date().toISOString()
+    };
+    config.servers[serverId] = serverProfile;
+    if (!config.settings.defaultServer || Object.keys(config.servers).length === 1) {
+      config.settings.defaultServer = serverId;
+    }
+    saveServersConfig(config);
+
+    // Create server.properties
+    const props = {
+      'server-port': serverPort,
+      'enable-rcon': 'true',
+      'rcon.port': rconPort,
+      'rcon.password': rconPassword,
+      'gamemode': serverProfile.gamemode,
+      'difficulty': serverProfile.difficulty,
+      'max-players': serverProfile.maxPlayers,
+      'view-distance': serverProfile.viewDistance,
+      'motd': serverProfile.name,
+      'online-mode': 'false',
+      'level-name': serverProfile.levelName,
+      'level-type': 'minecraft:normal',
+      'level-seed': seed
+    };
+    fs.writeFileSync(path.join(serverDir, 'server.properties'),
+      Object.entries(props).map(([k, v]) => `${k}=${v}`).join('\n'), 'utf8');
+    fs.writeFileSync(path.join(serverDir, 'eula.txt'), 'eula=true', 'utf8');
+
+    return { success: true, profile: serverProfile };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Override single-server process functions to use multi-server
 startServerProcess = async function() {
   const activeId = getActiveServerId();
   return startServerById(activeId);
 };
-const originalStopServerProcess = stopServerProcess;
 stopServerProcess = async function() {
   const activeId = getActiveServerId();
   return stopServerById(activeId);
 };
-const originalRestartServerProcess = restartServerProcess;
 restartServerProcess = async function() {
   const activeId = getActiveServerId();
   await stopServerById(activeId);
   await new Promise(r => setTimeout(r, 2000));
   return startServerById(activeId);
 };
-const originalGetStatus = ipcMain.handle('get-status');
-ipcMain.handle('get-status', async () => {
-  const result = await originalGetStatus();
-  const allStatus = await getAllServersStatus();
-  return { ...result, allServers: allStatus.servers };
-});
-const originalSendServerCommand = ipcMain.handle('send-server-command');
+
+// Override send-server-command to use active server RCON
+ipcMain.removeHandler('send-server-command');
 ipcMain.handle('send-server-command', async (_, command) => {
   const activeId = getActiveServerId();
   return sendRconCommandToServer(activeId, command);
 });
 
-// Cleanup all servers on app quit
-const originalWindowAllClosed = app.on('window-all-closed', () => {});
+// Override get-status to include all servers
+ipcMain.removeHandler('get-status');
+ipcMain.handle('get-status', async () => {
+  const status = {
+    server: 'offline', bot: 'offline', serverPid: null, botPid: null,
+    serverRam: 0, botRam: 0, serverUptime: 0, rconConnected,
+    lastCommand, serverRamTotal: 0, ops: [], allServers: {}
+  };
+  const allStatus = await getAllServersStatus();
+  status.allServers = allStatus.servers || {};
+
+  // Active server status
+  const activeId = getActiveServerId();
+  const activeStatus = allStatus.servers && allStatus.servers[activeId];
+  if (activeStatus) {
+    status.server = activeStatus.state;
+    status.serverPid = activeStatus.pid;
+    status.serverRam = activeStatus.ramUsed;
+    status.serverRamTotal = activeStatus.ramTotal;
+    status.serverUptime = activeStatus.uptime;
+    status.rconConnected = activeStatus.rconConnected;
+  }
+
+  // ops.json for active server
+  const activeServer = getServerConfig(activeId);
+  if (activeServer) {
+    const opsPath = path.join(getServerDirectory(activeId), 'ops.json');
+    if (fs.existsSync(opsPath)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(opsPath, 'utf8'));
+        status.ops = data.map(o => (o.name || '').toLowerCase());
+      } catch (_) {}
+    }
+  }
+
+  // Bot status
+  const bPid = readPid(BOT_PID_PATH);
+  if (bPid) {
+    const running = await isPidRunning(bPid, 'node.exe');
+    if (running) {
+      status.bot = 'online';
+      status.botPid = bPid;
+      status.botRam = await getPidRamMB(bPid);
+    } else {
+      try { fs.unlinkSync(BOT_PID_PATH); } catch (_) {}
+    }
+  }
+
+  return status;
+});
+
+// Cleanup all servers on app quit (append to existing handler)
 app.on('window-all-closed', () => {
   const s = readManagerSettings();
   if (s.closeToTray && !forceQuit) return;
   const serverIds = [...serverProcesses.keys()];
   for (const serverId of serverIds) stopServerById(serverId).catch(() => {});
-  activeTailers.forEach(t => t.stop()); activeTailers = [];
-  stopRamPolling(); stopBotRamPolling();
-  if (rconTimeoutId) clearTimeout(rconTimeoutId);
-  if (rcon) { try { rcon.end(); } catch (_) {} }
-  if (tray) { tray.destroy(); tray = null; }
-  if (process.platform !== 'darwin') app.quit();
-});
-
-
 });

@@ -37,6 +37,24 @@ contextBridge.exposeInMainWorld('api', {
   addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
   removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
 
+  // Server creation and management
+  createServer:          (profile)         => ipcRenderer.invoke('create-server', profile),
+  createServerWithDownload: (profile)      => ipcRenderer.invoke('create-server-with-download', profile),
+  importServer:          (sourcePath, id)   => ipcRenderer.invoke('import-server', sourcePath, id),
+  getPaperVersions:     ()                 => ipcRenderer.invoke('get-paper-versions'),
+  downloadPaperJar:      (version, dir, jarName, serverId) => ipcRenderer.invoke('download-paper-jar', version, dir, jarName, serverId),
+  detectServerJars:      (dirPath)          => ipcRenderer.invoke('detect-server-jars', dirPath),
+  resolveServerJar:      (serverId)         => ipcRenderer.invoke('resolve-server-jar', serverId),
+  setServerJar:          (serverId, jarName) => ipcRenderer.invoke('set-server-jar', serverId, jarName),
+
+  // Multi-server process control
+  startServerById:    (serverId) => ipcRenderer.invoke('start-server-by-id', serverId),
+  stopServerById:     (serverId) => ipcRenderer.invoke('stop-server-by-id', serverId),
+  restartServerById:  (serverId) => ipcRenderer.invoke('restart-server-by-id', serverId),
+  getServerStatus:    (serverId) => ipcRenderer.invoke('get-server-status', serverId),
+  getAllServersStatus: ()         => ipcRenderer.invoke('get-all-servers-status'),
+  sendRconCommand:    (serverId, cmd) => ipcRenderer.invoke('send-rcon-command', serverId, cmd),
+
   // Bot command tracking (renderer -> main)
   registerBotCommand: (cmd) => ipcRenderer.send('register-bot-command', cmd),
 
@@ -75,5 +93,10 @@ contextBridge.exposeInMainWorld('api', {
     const fn = (_, payload) => cb(payload);
     ipcRenderer.on('bot-ram-update', fn);
     return () => ipcRenderer.removeListener('bot-ram-update', fn);
+  },
+  onDownloadProgress: (cb) => {
+    const fn = (_, payload) => cb(payload);
+    ipcRenderer.on('download-progress', fn);
+    return () => ipcRenderer.removeListener('download-progress', fn);
   }
 });
