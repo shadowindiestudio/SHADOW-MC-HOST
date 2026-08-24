@@ -59,6 +59,24 @@ contextBridge.exposeInMainWorld('api', {
   getAllServersStatus: ()         => ipcRenderer.invoke('get-all-servers-status'),
   sendRconCommand:    (serverId, cmd) => ipcRenderer.invoke('send-rcon-command', serverId, cmd),
 
+  // Auto-setup
+  runAutoSetup: () => ipcRenderer.invoke('run-auto-setup'),
+
+  // Networking
+  getAllNetworkingStatus:    ()                         => ipcRenderer.invoke('get-all-networking-status'),
+  selectNetworkingMethod:    (method)                   => ipcRenderer.invoke('select-networking-method', method),
+  installZeroTier:           ()                         => ipcRenderer.invoke('install-zerotier'),
+  joinZeroTierNetwork:       (networkId)                => ipcRenderer.invoke('join-zerotier-network', networkId),
+  installTailscale:          ()                         => ipcRenderer.invoke('install-tailscale'),
+  startTailscale:             ()                         => ipcRenderer.invoke('start-tailscale'),
+  stopTailscale:              ()                         => ipcRenderer.invoke('stop-tailscale'),
+  getPortForwardingInfo:      (externalPort, internalPort) => ipcRenderer.invoke('get-port-forwarding-info', externalPort, internalPort),
+  installPlayit:              ()                         => ipcRenderer.invoke('install-playit'),
+  startPlayit:                ()                         => ipcRenderer.invoke('start-playit'),
+  saveManualAddress:          (address, notes)           => ipcRenderer.invoke('save-manual-address', address, notes),
+  getManualAddress:           ()                         => ipcRenderer.invoke('get-manual-address'),
+  getServerConnectionAddress: (serverId, serverPort, method) => ipcRenderer.invoke('get-server-connection-address', serverId, serverPort, method),
+
   // Bot command tracking (renderer -> main)
   registerBotCommand: (cmd) => ipcRenderer.send('register-bot-command', cmd),
 

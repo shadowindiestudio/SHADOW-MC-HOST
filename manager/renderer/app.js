@@ -250,21 +250,34 @@ btnGoToConsole.addEventListener('click', () => switchPanel('console'));
 function applyServerStatus(state, extras = {}) {
   serverStatus = state;
 
-  const isOnline   = state === 'online';
-  const isStarting = state === 'starting';
-  const isOffline  = state === 'offline';
+  const isOnline    = state === 'online';
+  const isStarting  = state === 'starting';
+  const isStopping   = state === 'stopping';
+  const isFailed    = state === 'failed';
+  const isOffline   = state === 'offline';
+  const isBusy      = isOnline || isStarting || isStopping;
 
   // Sidebar dot
-  serverSidebarDot.className = isOnline ? 'status-dot online' : isStarting ? 'status-dot warning' : 'status-dot offline';
+  let dotClass = 'status-dot offline';
+  if (isOnline) dotClass = 'status-dot online';
+  else if (isStarting || isStopping) dotClass = 'status-dot warning';
+  else if (isFailed) dotClass = 'status-dot offline';
+  serverSidebarDot.className = dotClass;
 
   // Badge
-  serverStatusBadge.className = `status-badge ${isOnline ? 'online' : isStarting ? 'warning' : 'offline'}`;
-  serverStatusBadge.textContent = isOnline ? 'Online' : isStarting ? 'Starting...' : 'Offline';
+  let badgeClass = 'status-badge offline';
+  let badgeText = 'Offline';
+  if (isOnline) { badgeClass = 'status-badge online'; badgeText = 'Online'; }
+  else if (isStarting) { badgeClass = 'status-badge warning'; badgeText = 'Starting...'; }
+  else if (isStopping) { badgeClass = 'status-badge warning'; badgeText = 'Stopping...'; }
+  else if (isFailed) { badgeClass = 'status-badge offline'; badgeText = 'Failed'; }
+  serverStatusBadge.className = badgeClass;
+  serverStatusBadge.textContent = badgeText;
 
   // Buttons
-  btnStartServer.disabled   = isOnline || isStarting;
-  btnStopServer.disabled    = isOffline || isStarting;
-  btnRestartServer.disabled = isOffline;
+  btnStartServer.disabled   = isBusy;
+  btnStopServer.disabled    = !isOnline;
+  btnRestartServer.disabled = !isOnline;
 
   // Uptime ticker
   if (isOnline) {
@@ -355,7 +368,7 @@ window.api.onSpawnError(({ source, message }) => {
   if (activePanel === 'console') appendSystemLine(fullConsoleOutput, text);
 
   // Re-enable the button so user can try again
-  if (source === 'server') { btnStartServer.disabled = false; }
+  if (source === 'server') { btnStartServer.disabled = false; applyServerStatus('failed'); }
   if (source === 'bot')    { btnStartBot.disabled    = false; }
 });
 
@@ -369,7 +382,7 @@ btnStartServer.addEventListener('click', async () => {
 
   const res = await window.api.startServer();
   if (!res.success) {
-    applyServerStatus('offline');
+    applyServerStatus('failed');
     appendSystemLine(miniConsoleOutput, `[Error] ${res.error}`);
     if (activePanel === 'console') appendSystemLine(fullConsoleOutput, `[Error] ${res.error}`);
   } else {
@@ -381,6 +394,7 @@ btnStopServer.addEventListener('click', async () => {
   if (!confirm('Are you sure you want to stop the Minecraft Server?')) return;
   btnStopServer.disabled    = true;
   btnRestartServer.disabled = true;
+  applyServerStatus('stopping');
   appendSystemLine(miniConsoleOutput, '[System] Stopping server...');
 
   const res = await window.api.stopServer();
@@ -1117,7 +1131,7 @@ async function oneClickStart() {
       }, 5000);
     } else {
       appendSystemLine(miniConsoleOutput, `[One-Click] Server failed to start: ${serverResult.error}`);
-      applyServerStatus('offline');
+      applyServerStatus('failed');
     }
 
   } catch (e) {

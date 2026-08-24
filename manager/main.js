@@ -1816,6 +1816,7 @@ async function stopServerById(serverId) {
     return { success: false, error: `Server '${serverId}' is not running` };
   }
   const state = serverProcesses.get(serverId);
+  send('status-change', { type: 'server', serverId, state: 'stopping' });
   if (state && state.rcon && state.rconConnected) {
     try { await state.rcon.send('stop'); await new Promise(r => setTimeout(r, 8000)); }
     catch (e) { console.error(`RCON stop failed for ${serverId}:`, e.message); }
