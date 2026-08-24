@@ -2323,6 +2323,110 @@ ipcMain.handle('set-server-jar', (_, serverId, jarName) => {
   } catch (e) { return { success: false, error: e.message }; }
 });
 
+// ===========================================================================
+// NETWORKING IPC HANDLERS
+// ===========================================================================
+
+// ZeroTier
+ipcMain.handle('install-zerotier', async () => {
+  try { return await networking.installZeroTier(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('join-zerotier-network', async (_, networkId) => {
+  try { return await networking.joinZeroTierNetwork(networkId); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('start-zerotier', async () => {
+  try { return await networking.startZeroTier(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('stop-zerotier', async () => {
+  try { return await networking.stopZeroTier(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+// Tailscale
+ipcMain.handle('install-tailscale', async () => {
+  try { return await networking.installTailscale(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('start-tailscale', async () => {
+  try { return await networking.startTailscale(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('stop-tailscale', async () => {
+  try { return await networking.stopTailscale(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+// Playit.gg
+ipcMain.handle('install-playit', async () => {
+  try { return await networking.installPlayit(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('start-playit', async () => {
+  try { return await networking.startPlayit(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('stop-playit', async () => {
+  try { return await networking.stopPlayit(); }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+// Manual address
+ipcMain.handle('get-manual-address', () => {
+  try { return { success: true, ...networking.getManualAddress() }; }
+  catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('save-manual-address', (_, address, notes) => {
+  try {
+    networking.saveManualAddress(address, notes);
+    return { success: true };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Port forwarding
+ipcMain.handle('get-port-forwarding-info', async (_, externalPort, internalPort) => {
+  try {
+    const result = await networking.getPortForwardingInfo(externalPort, internalPort);
+    return { success: true, ...result };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Server connection address
+ipcMain.handle('get-server-connection-address', (_, serverId, serverPort, method = 'zerotier') => {
+  try {
+    const result = networking.getServerConnectionAddress(serverId, serverPort, method);
+    return { success: true, ...result };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Networking method selection
+ipcMain.handle('select-networking-method', (_, method) => {
+  try {
+    const config = networking.loadNetworkingConfig();
+    config.selectedMethod = method;
+    networking.saveNetworkingConfig(config);
+    return { success: true, method };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
+// Get all networking status
+ipcMain.handle('get-all-networking-status', async () => {
+  try {
+    const result = await networking.getAllMethodsStatus();
+    return { success: true, ...result };
+  } catch (e) { return { success: false, error: e.message }; }
+});
+
 ipcMain.handle('create-server-with-download', async (_, profile) => {
   try {
     const config = loadServersConfig();

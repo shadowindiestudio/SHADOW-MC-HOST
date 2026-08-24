@@ -1561,3 +1561,171 @@ input:checked + .toggle-slider:before {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===========================================================================
+   ENHANCED SERVER PROFILES STYLES
+   =========================================================================== */
+
+/* Server panel header with actions */
+.panel-header.space-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.server-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Server profile card enhancements */
+.server-profile-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.server-profile-card:hover {
+  border-color: var(--accent);
+}
+
+.server-profile-card.active {
+  border-color: var(--status-online);
+  box-shadow: 0 0 0 2px rgba(0, 200, 83, 0.3);
+}
+
+.server-profile-header {
+  margin-bottom: 10px;
+}
+
+.server-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.server-profile-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.server-profile-id {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-base);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.server-profile-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.server-profile-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.server-profile-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.server-profile-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.server-profile-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.server-action-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.server-action-group .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* Server modals */
+.server-modal {
+  max-width: 600px;
+  width: 90vw;
+}
+
+.server-modal .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Radio group styling */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 150ms ease;
+}
+
+.radio-label:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent);
+}
+
+.radio-label input[type="radio"] {
+  margin-top: 2px;
+}
+
+.radio-label small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Server create options */
+.server-create-options {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+/* Refresh button with icon */
+.server-panel-actions .btn svg {
+  vertical-align: middle;
+}

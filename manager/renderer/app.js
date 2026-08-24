@@ -1852,3 +1852,480 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+
+// ===========================================================================
+// ENHANCED SERVER PROFILES FUNCTIONALITY
+// ===========================================================================
+
+// Additional DOM references for enhanced server management
+const btnRefreshServers = document.getElementById('btn-refresh-servers');
+const serverModalTitle = document.getElementById('server-modal-title');
+const newServerPort = document.getElementById('new-server-port');
+const newServerVersion = document.getElementById('new-server-version');
+const newServerImportPath = document.getElementById('new-server-import-path');
+
+// Edit server modal elements
+const editServerModal = document.getElementById('edit-server-modal');
+const btnCloseEditServer = document.getElementById('btn-close-edit-server');
+const btnCancelEditServer = document.getElementById('btn-cancel-edit-server');
+const btnConfirmEditServer = document.getElementById('btn-confirm-edit-server');
+const editServerId = document.getElementById('edit-server-id');
+const editServerName = document.getElementById('edit-server-name');
+const editServerPath = document.getElementById('edit-server-path');
+const editServerBotdir = document.getElementById('edit-server-botdir');
+const editServerMaxram = document.getElementById('edit-server-maxram');
+const editServerPort = document.getElementById('edit-server-port');
+const editServerNotes = document.getElementById('edit-server-notes');
+
+// JAR management modal elements
+const jarManagementModal = document.getElementById('jar-management-modal');
+const btnCloseJarModal = document.getElementById('btn-close-jar-modal');
+const btnCancelJar = document.getElementById('btn-cancel-jar');
+const btnConfirmJar = document.getElementById('btn-confirm-jar');
+const currentJarDisplay = document.getElementById('current-jar-display');
+const availableJarsList = document.getElementById('available-jars-list');
+const selectJar = document.getElementById('select-jar');
+
+// State for server management
+let editingServerId = null;
+let managingJarServerId = null;
+
+// Initialize server status cache
+if (!window.serverStatusCache) {
+  window.serverStatusCache = {};
+}
+
+// ===========================================================================
+// Enhanced Server Profile Rendering
+// ===========================================================================
+
+function renderServerProfiles() {
+  if (Object.keys(serverProfiles).length === 0) {
+    serversEmptyState.style.display = 'block';
+    serverProfilesGrid.innerHTML = '';
+    return;
+  }
+
+  serversEmptyState.style.display = 'none';
+  serverProfilesGrid.innerHTML = '';
+
+  for (const [id, profile] of Object.entries(serverProfiles)) {
+    const card = document.createElement('div');
+    card.className = 'server-profile-card' + (id === activeServerId ? ' active' : '');
+    card.dataset.serverId = id;
+
+    // Get server status from cache
+    let serverStatus = 'offline';
+    let serverState = null;
+    
+    if (window.serverStatusCache && window.serverStatusCache[id]) {
+      serverState = window.serverStatusCache[id];
+      serverStatus = serverState.state || 'offline';
+    }
+
+    const statusClass = serverStatus === 'online' ? 'online' : 
+                       serverStatus === 'starting' ? 'warning' : 'offline';
+    const statusText = serverStatus === 'online' ? 'Online' : 
+                       serverStatus === 'starting' ? 'Starting...' : 'Offline';
+
+    const serverPort = profile.serverPort || 25565;
+
+    card.innerHTML = `
+      <div class="server-profile-header">
+        <div class="server-profile-name-row">
+          <h4 class="server-profile-name">${escapeHtml(profile.name || id)}</h4>
+          <span class="server-profile-id">${escapeHtml(id)}</span>
+          <span class="server-profile-status">
+            <span class="status-dot ${statusClass}"></span>
+            ${statusText}
+          </span>
+        </div>
+      </div>
+      <div class="server-profile-meta">
+        <span>\ud83d\udcc1 ${escapeHtml(profile.rootPath || '../server')}</span>
+        <span>\ud83d\udcbe ${escapeHtml(profile.maxRam || '4G')}</span>
+        <span>\ud83d\udcee Port: ${serverPort}</span>
+        ${profile.notes ? '<span>\ud83d\udcdd ' + escapeHtml(profile.notes) + '</span>' : ''}
+      </div>
+      <div class="server-profile-actions">
+        <div class="server-action-group">
+          <button class="btn btn-sm ${id === activeServerId ? 'btn-primary' : ''}" 
+                  onclick="setActiveServer('${id}')" 
+                  title="Set as active server">
+            ${id === activeServerId ? '\u2713 Active' : 'Activate'}
+          </button>
+          <button class="btn btn-sm" 
+                  onclick="startServerByIdFromUI('${id}')" 
+                  title="Start server" 
+                  ${serverStatus === 'online' || serverStatus === 'starting' ? 'disabled' : ''}>
+            \u25b6 Start
+          </button>
+          <button class="btn btn-sm btn-danger" 
+                  onclick="stopServerByIdFromUI('${id}')" 
+                  title="Stop server" 
+                  ${serverStatus !== 'online' ? 'disabled' : ''}>
+            \u25a0 Stop
+          </button>
+        </div>
+        <div class="server-action-group">
+          <button class="btn btn-sm" 
+                  onclick="openJarManagement('${id}')" 
+                  title="Manage server JAR">
+            \ud83c\udfae JAR
+          </button>
+          <button class="btn btn-sm" 
+                  onclick="editServerProfile('${id}')" 
+                  title="Edit server profile">
+            \u270f Edit
+          </button>
+          <button class="btn btn-sm btn-danger" 
+                  onclick="removeServerProfile('${id}')" 
+                  title="Remove server profile">
+            \u274e Remove
+          </button>
+        </div>
+      </div>
+    `;
+
+    serverProfilesGrid.appendChild(card);
+  }
+}
+
+// ===========================================================================
+// Server Lifecycle Functions
+// ===========================================================================
+
+async function startServerByIdFromUI(serverId) {
+  try {
+    const result = await window.api.startServerById(serverId);
+    if (result.success) {
+      refreshServerStatus();
+    } else {
+      alert('Failed to start server: ' + result.error);
+    }
+  } catch (e) {
+    alert('Error starting server: ' + e.message);
+  }
+}
+
+async function stopServerByIdFromUI(serverId) {
+  if (!confirm(`Are you sure you want to stop server "${serverId}"?`)) return;
+  
+  try {
+    const result = await window.api.stopServerById(serverId);
+    if (result.success) {
+      refreshServerStatus();
+    } else {
+      alert('Failed to stop server: ' + result.error);
+    }
+  } catch (e) {
+    alert('Error stopping server: ' + e.message);
+  }
+}
+
+async function refreshServerStatus() {
+  try {
+    const result = await window.api.getAllServersStatus();
+    if (result.success) {
+      window.serverStatusCache = result.servers;
+      renderServerProfiles();
+    }
+  } catch (e) {
+    console.error('Failed to refresh server status:', e);
+  }
+}
+
+// ===========================================================================
+// Enhanced Add Server Modal
+// ===========================================================================
+
+function updateAddServerModal() {
+  const method = document.querySelector('input[name="server-create-method"]:checked')?.value || 'profile';
+  
+  if (method === 'download') {
+    serverModalTitle.textContent = 'Create New Server';
+    document.getElementById('server-version-options').style.display = 'block';
+    document.getElementById('server-import-options').style.display = 'none';
+  } else if (method === 'import') {
+    serverModalTitle.textContent = 'Import Existing Server';
+    document.getElementById('server-version-options').style.display = 'none';
+    document.getElementById('server-import-options').style.display = 'block';
+  } else {
+    serverModalTitle.textContent = 'Add New Server Profile';
+    document.getElementById('server-version-options').style.display = 'none';
+    document.getElementById('server-import-options').style.display = 'none';
+  }
+}
+
+// Enhanced add server button handler
+btnAddServer.addEventListener('click', () => {
+  addServerModal.classList.add('active');
+  newServerId.value = '';
+  newServerName.value = '';
+  newServerPath.value = '../server';
+  newServerBotdir.value = '../mc-bot';
+  newServerMaxram.value = '4G';
+  newServerPort.value = '25565';
+  newServerNotes.value = '';
+  document.querySelector('input[name="server-create-method"][value="profile"]').checked = true;
+  updateAddServerModal();
+});
+
+// Enhanced confirm add server
+btnConfirmAddServer.addEventListener('click', async () => {
+  const method = document.querySelector('input[name="server-create-method"]:checked')?.value || 'profile';
+  const profile = {
+    id: newServerId.value.trim() || Date.now().toString(),
+    name: newServerName.value.trim() || newServerId.value.trim(),
+    rootPath: newServerPath.value.trim(),
+    botDir: newServerBotdir.value.trim(),
+    maxRam: newServerMaxram.value.trim(),
+    serverPort: parseInt(newServerPort.value) || 25565,
+    notes: newServerNotes.value.trim()
+  };
+
+  if (!profile.id) {
+    alert('Please enter a profile ID');
+    return;
+  }
+
+  try {
+    let result;
+    
+    if (method === 'download') {
+      profile.minecraftVersion = newServerVersion.value;
+      result = await window.api.createServerWithDownload(profile);
+    } else if (method === 'import') {
+      const importPath = newServerImportPath.value.trim();
+      if (!importPath) {
+        alert('Please enter a source path to import from');
+        return;
+      }
+      result = await window.api.importServer(importPath, profile.id);
+    } else {
+      result = await window.api.addServerProfile(profile);
+    }
+    
+    if (result.success) {
+      addServerModal.classList.remove('active');
+      loadServerProfiles();
+      
+      if (Object.keys(serverProfiles).length === 1) {
+        await window.api.setActiveServer(profile.id);
+        activeServerId = profile.id;
+      }
+      
+      refreshServerStatus();
+      pollStatus();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (e) {
+    console.error('Failed to add server:', e);
+    alert('Failed to add server: ' + e.message);
+  }
+});
+
+// ===========================================================================
+// Edit Server Profile
+// ===========================================================================
+
+async function editServerProfile(serverId) {
+  const profile = serverProfiles[serverId];
+  if (!profile) return;
+
+  editingServerId = serverId;
+  
+  editServerId.value = serverId;
+  editServerName.value = profile.name || serverId;
+  editServerPath.value = profile.rootPath || '../server';
+  editServerBotdir.value = profile.botDir || '../mc-bot';
+  editServerMaxram.value = profile.maxRam || '4G';
+  editServerPort.value = profile.serverPort || 25565;
+  editServerNotes.value = profile.notes || '';
+  
+  editServerModal.classList.add('active');
+}
+
+btnConfirmEditServer.addEventListener('click', async () => {
+  if (!editingServerId) return;
+  
+  const profile = {
+    id: editingServerId,
+    name: editServerName.value.trim(),
+    rootPath: editServerPath.value.trim(),
+    botDir: editServerBotdir.value.trim(),
+    maxRam: editServerMaxram.value.trim(),
+    serverPort: parseInt(editServerPort.value) || 25565,
+    notes: editServerNotes.value.trim()
+  };
+  
+  if (!profile.name) {
+    alert('Please enter a display name');
+    return;
+  }
+  
+  try {
+    const config = await window.api.getServerProfiles();
+    if (config.success) {
+      config.profiles[editingServerId] = { ...config.profiles[editingServerId], ...profile };
+      const result = await window.api.addServerProfile(config.profiles[editingServerId]);
+      
+      if (result.success) {
+        editServerModal.classList.remove('active');
+        editingServerId = null;
+        loadServerProfiles();
+        refreshServerStatus();
+      } else {
+        alert('Error: ' + result.error);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to edit server:', e);
+    alert('Failed to edit server: ' + e.message);
+  }
+});
+
+// Close edit modal handlers
+btnCloseEditServer.addEventListener('click', () => {
+  editServerModal.classList.remove('active');
+  editingServerId = null;
+});
+
+btnCancelEditServer.addEventListener('click', () => {
+  editServerModal.classList.remove('active');
+  editingServerId = null;
+});
+
+// ===========================================================================
+// JAR Management
+// ===========================================================================
+
+async function openJarManagement(serverId) {
+  managingJarServerId = serverId;
+  
+  try {
+    const result = await window.api.resolveServerJar(serverId);
+    if (result.success && result.jar) {
+      currentJarDisplay.textContent = result.jar + (result.autoDetected ? ' (auto-detected)' : '');
+    } else {
+      currentJarDisplay.textContent = 'No JAR found';
+    }
+    
+    const profile = serverProfiles[serverId];
+    if (profile && profile.rootPath) {
+      const jarsResult = await window.api.detectServerJars(profile.rootPath);
+      if (jarsResult.success && jarsResult.jars && jarsResult.jars.length > 0) {
+        availableJarsList.innerHTML = '';
+        selectJar.innerHTML = '<option value="">-- Select a JAR --</option>';
+        
+        jarsResult.jars.forEach(jar => {
+          const jarItem = document.createElement('div');
+          jarItem.style.padding = '4px 8px';
+          jarItem.style.fontSize = '12px';
+          jarItem.style.fontFamily = 'monospace';
+          jarItem.textContent = `${jar.name} (${jar.sizeMB} MB)`;
+          availableJarsList.appendChild(jarItem);
+          
+          const option = document.createElement('option');
+          option.value = jar.name;
+          option.textContent = `${jar.name} (${jar.sizeMB} MB)`;
+          selectJar.appendChild(option);
+        });
+      } else {
+        availableJarsList.innerHTML = '<div style="color: var(--text-muted); padding: 8px;">No JARs found in server directory</div>';
+        selectJar.innerHTML = '<option value="">No JARs found</option>';
+      }
+    }
+    
+    jarManagementModal.classList.add('active');
+  } catch (e) {
+    console.error('Failed to open JAR management:', e);
+    alert('Failed to open JAR management: ' + e.message);
+  }
+}
+
+btnConfirmJar.addEventListener('click', async () => {
+  if (!managingJarServerId) return;
+  
+  const jarName = selectJar.value;
+  if (!jarName) {
+    alert('Please select a JAR');
+    return;
+  }
+  
+  try {
+    const result = await window.api.setServerJar(managingJarServerId, jarName);
+    if (result.success) {
+      jarManagementModal.classList.remove('active');
+      managingJarServerId = null;
+      loadServerProfiles();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (e) {
+    console.error('Failed to set JAR:', e);
+    alert('Failed to set JAR: ' + e.message);
+  }
+});
+
+// Close JAR modal handlers
+btnCloseJarModal.addEventListener('click', () => {
+  jarManagementModal.classList.remove('active');
+  managingJarServerId = null;
+});
+
+btnCancelJar.addEventListener('click', () => {
+  jarManagementModal.classList.remove('active');
+  managingJarServerId = null;
+});
+
+// ===========================================================================
+// Server Creation Method Radio Buttons
+// ===========================================================================
+
+document.querySelectorAll('input[name="server-create-method"]').forEach(radio => {
+  radio.addEventListener('change', updateAddServerModal);
+});
+
+// Refresh servers button
+if (btnRefreshServers) {
+  btnRefreshServers.addEventListener('click', () => {
+    loadServerProfiles();
+    refreshServerStatus();
+  });
+}
+
+// Close modals on escape
+editServerModal.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    editServerModal.classList.remove('active');
+    editingServerId = null;
+  }
+});
+
+jarManagementModal.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    jarManagementModal.classList.remove('active');
+    managingJarServerId = null;
+  }
+});
+
+// Close modals when clicking outside
+if (editServerModal) {
+  editServerModal.addEventListener('click', (e) => {
+    if (e.target.id === 'edit-server-modal') {
+      editServerModal.classList.remove('active');
+      editingServerId = null;
+    }
+  });
+}
+
+if (jarManagementModal) {
+  jarManagementModal.addEventListener('click', (e) => {
+    if (e.target.id === 'jar-management-modal') {
+      jarManagementModal.classList.remove('active');
+      managingJarServerId = null;
+    }
+  });
+}
