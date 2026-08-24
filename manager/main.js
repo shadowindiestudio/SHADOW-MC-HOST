@@ -7,6 +7,10 @@ const { spawn, exec, execSync } = require('child_process');
 const { Rcon } = require('rcon-client');
 const pidusage = require('pidusage');
 const https = require('https');
+const os = require('os');
+const dns = require('dns');
+const net = require('net');
+const networking = require('./networking');
 
 // ---------------------------------------------------------------------------
 // Paths (all relative to manager/ dir so the project stays portable)
@@ -2487,3 +2491,4 @@ app.on('window-all-closed', () => {
   const serverIds = [...serverProcesses.keys()];
   for (const serverId of serverIds) stopServerById(serverId).catch(() => {});
 });
+

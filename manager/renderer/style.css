@@ -1229,3 +1229,335 @@ input:checked + .toggle-slider:before {
     grid-template-columns: 1fr;
   }
 }
+
+/* ===========================================================================
+   NETWORKING PANEL STYLES
+   =========================================================================== */
+
+.networking-container {
+  padding: 0 15px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.networking-methods-card {
+  margin-bottom: 20px;
+}
+
+.networking-intro {
+  color: var(--text-secondary);
+  margin-bottom: 15px;
+}
+
+.networking-intro strong {
+  color: var(--text-primary);
+}
+
+/* Method Tabs */
+.method-tabs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.method-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  color: var(--text-secondary);
+}
+
+.method-tab:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.method-tab.active {
+  background: var(--accent);
+  color: var(--bg-base);
+  border-color: var(--accent);
+}
+
+.method-icon {
+  font-size: 20px;
+}
+
+.method-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.method-status {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Method Panels */
+.networking-method-panel {
+  display: none;
+  margin-bottom: 20px;
+}
+
+.networking-method-panel.active {
+  display: block;
+}
+
+.method-status-section {
+  margin: 15px 0;
+  padding: 15px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.status-row span:first-child {
+  color: var(--text-secondary);
+  min-width: 140px;
+}
+
+.address-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--console-text);
+  background: var(--bg-base);
+  padding: 4px 8px;
+  border-radius: 4px;
+  min-width: 150px;
+  text-align: center;
+}
+
+.method-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 15px 0;
+}
+
+.method-networks {
+  margin: 15px 0;
+  padding: 15px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+}
+
+.method-networks h5 {
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+
+#zt-networks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.zt-network-card {
+  background: var(--bg-base);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+}
+
+.zt-network-card .net-id {
+  font-weight: 600;
+  color: var(--console-text);
+}
+
+.zt-network-card .net-name {
+  color: var(--text-secondary);
+  margin: 0 5px;
+}
+
+.zt-network-card .net-status {
+  color: var(--status-online);
+}
+
+.zt-network-card .net-status.offline {
+  color: var(--status-offline);
+}
+
+.method-info {
+  margin-top: 15px;
+  padding: 15px;
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.method-info p {
+  margin: 5px 0;
+}
+
+.method-info ol {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.method-info li {
+  margin: 5px 0;
+}
+
+.method-info a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.method-info a:hover {
+  text-decoration: underline;
+}
+
+.method-info em {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Input with Button */
+.input-with-btn {
+  display: flex;
+  gap: 8px;
+}
+
+.input-with-btn input {
+  flex: 1;
+}
+
+/* Form Grid 2 Column */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+@media (max-width: 600px) {
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Method Selector */
+.method-selector {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.method-selector label {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.method-selector select {
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Server Connections Grid */
+.server-connections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 15px;
+  margin: 15px 0;
+}
+
+.server-connection-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.server-connection-card .server-conn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.server-connection-card .server-conn-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.server-connection-card .server-conn-status {
+  font-size: 11px;
+}
+
+.server-connection-card .server-conn-address {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--console-text);
+  word-break: break-all;
+  margin: 10px 0;
+}
+
+.server-connection-card .server-conn-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.server-connection-card .server-conn-actions .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* LAN Addresses List */
+#lan-addresses-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lan-address-item {
+  background: var(--bg-base);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--console-text);
+  border: 1px solid var(--border);
+}
+
+.lan-address-item .lan-interface {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-left: 5px;
+}
+
+/* Responsive Networking */
+@media (max-width: 768px) {
+  .method-tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .networking-method-panel {
+    margin-bottom: 15px;
+  }
+  
+  .server-connections-grid {
+    grid-template-columns: 1fr;
+  }
+}

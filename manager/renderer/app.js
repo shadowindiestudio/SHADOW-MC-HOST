@@ -1153,3 +1153,702 @@ setTimeout(async () => {
     console.log('First run check failed, staying on dashboard');
   }
 }, 1000);
+
+// ===========================================================================
+// NETWORKING PANEL
+// ===========================================================================
+
+// Networking state
+let networkingStatus = null;
+let currentNetworkingMethod = 'zerotier';
+let manualAddress = { address: '', notes: '' };
+
+// DOM References for Networking
+const networkingPanel = document.getElementById('networking-panel');
+const methodTabs = document.querySelectorAll('.method-tab');
+const methodPanels = document.querySelectorAll('.networking-method-panel');
+const serverMethodSelect = document.getElementById('server-method-select');
+const serverConnectionsGrid = document.getElementById('server-connections-grid');
+const connectionsEmptyState = document.getElementById('connections-empty-state');
+
+// ZeroTier elements
+const ztStatusBadge = document.getElementById('zt-status-badge');
+const ztStatus = document.getElementById('zt-status');
+const ztAddress = document.getElementById('zt-address');
+const btnCopyZt = document.getElementById('btn-copy-zt');
+const btnInstallZerotier = document.getElementById('btn-install-zerotier');
+const btnJoinZerotier = document.getElementById('btn-join-zerotier');
+const btnRefreshZerotier = document.getElementById('btn-refresh-zerotier');
+const ztNetworks = document.getElementById('zt-networks');
+const ztNetworksList = document.getElementById('zt-networks-list');
+const ztNetworkId = document.getElementById('zt-network-id');
+const btnJoinZtNetwork = document.getElementById('btn-join-zt-network');
+
+// Tailscale elements
+const tsStatusBadge = document.getElementById('ts-status-badge');
+const tsStatus = document.getElementById('ts-status');
+const tsAddress = document.getElementById('ts-address');
+const btnCopyTs = document.getElementById('btn-copy-ts');
+const btnInstallTailscale = document.getElementById('btn-install-tailscale');
+const btnStartTailscale = document.getElementById('btn-start-tailscale');
+const btnStopTailscale = document.getElementById('btn-stop-tailscale');
+const btnRefreshTailscale = document.getElementById('btn-refresh-tailscale');
+
+// LAN elements
+const lanStatusBadge = document.getElementById('lan-status-badge');
+const lanAddressesList = document.getElementById('lan-addresses-list');
+
+// Port Forwarding elements
+const pfStatusBadge = document.getElementById('pf-status-badge');
+const pfPublicIp = document.getElementById('pf-public-ip');
+const pfAddress = document.getElementById('pf-address');
+const btnCopyPfIp = document.getElementById('btn-copy-pf-ip');
+const btnCopyPf = document.getElementById('btn-copy-pf');
+const pfExternalPort = document.getElementById('pf-external-port');
+const pfInternalPort = document.getElementById('pf-internal-port');
+const pfLocalStatus = document.getElementById('pf-local-status');
+const btnRefreshPf = document.getElementById('btn-refresh-pf');
+const pfExternalDisplay = document.getElementById('pf-external-display');
+const pfInternalDisplay = document.getElementById('pf-internal-display');
+const pfLocalIp = document.getElementById('pf-local-ip');
+
+// Playit.gg elements
+const pgStatusBadge = document.getElementById('pg-status-badge');
+const pgStatus = document.getElementById('pg-status');
+const pgAddress = document.getElementById('pg-address');
+const btnCopyPg = document.getElementById('btn-copy-pg');
+const btnInstallPlayit = document.getElementById('btn-install-playit');
+const btnStartPlayit = document.getElementById('btn-start-playit');
+const btnRefreshPlayit = document.getElementById('btn-refresh-playit');
+
+// Manual elements
+const manualStatusBadge = document.getElementById('manual-status-badge');
+const manualAddressInput = document.getElementById('manual-address');
+const manualNotesInput = document.getElementById('manual-notes');
+const btnSaveManual = document.getElementById('btn-save-manual');
+const manualSavedAddress = document.getElementById('manual-saved-address');
+const btnCopyManual = document.getElementById('btn-copy-manual');
+
+// ===========================================================================
+// Navigation - Add networking panel handler
+// ===========================================================================
+
+// Update the switchPanel function to handle networking
+function switchPanel(id) {
+  activePanel = id;
+  navBtns.forEach(b => b.classList.toggle('active', b.dataset.panel === id));
+  panels.forEach(p  => p.classList.toggle('active', p.id === `${id}-panel`));
+
+  if (id === 'console')  loadConsoleHistory();
+  if (id === 'settings') loadSettings();
+  if (id === 'servers') loadServerProfiles();
+  if (id === 'players')  refreshPlayersPanel();
+  if (id === 'setup') checkPrerequisites();
+  if (id === 'networking') loadNetworkingPanel();
+}
+
+// ===========================================================================
+// Networking Panel Functions
+// ===========================================================================
+
+async function loadNetworkingPanel() {
+  // Load all networking status
+  await refreshAllNetworkingStatus();
+  
+  // Load manual address
+  loadManualAddress();
+  
+  // Load server connections
+  renderServerConnections();
+  
+  // Setup event listeners
+  setupNetworkingListeners();
+}
+
+async function refreshAllNetworkingStatus() {
+  try {
+    const status = await window.api.getAllNetworkingStatus();
+    networkingStatus = status;
+    currentNetworkingMethod = status.selectedMethod || 'zerotier';
+    
+    // Update all method statuses
+    updateZeroTierStatus(status.zerotier);
+    updateTailscaleStatus(status.tailscale);
+    updateLanStatus(status.lan);
+    updatePortForwardingStatus(status.portForwarding);
+    updatePlayitStatus(status.playitgg);
+    updateManualStatus(status.manual);
+    
+    // Select the current method tab
+    selectMethodTab(currentNetworkingMethod);
+    
+  } catch (e) {
+    console.error('Failed to load networking status:', e);
+  }
+}
+
+function selectMethodTab(method) {
+  methodTabs.forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.method === method);
+  });
+  methodPanels.forEach(panel => {
+    panel.classList.toggle('active', panel.id === `${method}-panel`);
+  });
+  
+  // Update server connections with new method
+  renderServerConnections();
+}
+
+// ===========================================================================
+// ZeroTier Functions
+// ===========================================================================
+
+function updateZeroTierStatus(info) {
+  const installed = info.installed || false;
+  const running = info.running || false;
+  const address = info.address || '';
+  const networks = info.networks || [];
+  
+  // Update badge
+  if (installed && running && address) {
+    ztStatusBadge.textContent = 'Online';
+    ztStatusBadge.className = 'method-status';
+    ztStatus.className = 'status-badge online';
+    ztStatus.textContent = 'Connected';
+  } else if (installed && running) {
+    ztStatusBadge.textContent = 'Running';
+    ztStatusBadge.className = 'method-status';
+    ztStatus.className = 'status-badge online';
+    ztStatus.textContent = 'Running';
+  } else if (installed) {
+    ztStatusBadge.textContent = 'Installed';
+    ztStatusBadge.className = 'method-status';
+    ztStatus.className = 'status-badge offline';
+    ztStatus.textContent = 'Not Running';
+  } else {
+    ztStatusBadge.textContent = 'Not Installed';
+    ztStatusBadge.className = 'method-status';
+    ztStatus.className = 'status-badge offline';
+    ztStatus.textContent = 'Not Installed';
+  }
+  
+  ztAddress.textContent = address || '-';
+  
+  // Show/hide copy button
+  if (address) {
+    btnCopyZt.style.display = 'inline-block';
+  } else {
+    btnCopyZt.style.display = 'none';
+  }
+  
+  // Show/hide install button
+  btnInstallZerotier.style.display = !installed ? 'inline-block' : 'none';
+  btnJoinZerotier.style.display = installed && running && address ? 'inline-block' : 'none';
+  
+  // Show networks section if connected
+  if (installed && running && networks.length > 0) {
+    ztNetworks.style.display = 'block';
+    renderZeroTierNetworks(networks);
+  } else {
+    ztNetworks.style.display = 'none';
+  }
+}
+
+function renderZeroTierNetworks(networks) {
+  ztNetworksList.innerHTML = '';
+  
+  networks.forEach(net => {
+    const card = document.createElement('div');
+    card.className = 'zt-network-card';
+    card.innerHTML = `
+      <span class="net-id">${net.id}</span>
+      <span class="net-name">${net.name || 'Unnamed'}</span>
+      <span class="net-status ${net.status === 'OK' ? 'online' : 'offline'}">${net.status}</span>
+    `;
+    ztNetworksList.appendChild(card);
+  });
+}
+
+// ===========================================================================
+// Tailscale Functions
+// ===========================================================================
+
+function updateTailscaleStatus(info) {
+  const installed = info.installed || false;
+  const running = info.running || false;
+  const address = info.address || '';
+  const status = info.status || 'unknown';
+  
+  // Update badge
+  if (installed && running && address) {
+    tsStatusBadge.textContent = 'Online';
+    tsStatusBadge.className = 'method-status';
+    tsStatus.className = 'status-badge online';
+    tsStatus.textContent = 'Connected';
+  } else if (installed && running) {
+    tsStatusBadge.textContent = 'Running';
+    tsStatusBadge.className = 'method-status';
+    tsStatus.className = 'status-badge online';
+    tsStatus.textContent = 'Running';
+  } else if (installed) {
+    tsStatusBadge.textContent = 'Installed';
+    tsStatusBadge.className = 'method-status';
+    tsStatus.className = 'status-badge offline';
+    tsStatus.textContent = 'Not Running';
+  } else {
+    tsStatusBadge.textContent = 'Not Installed';
+    tsStatusBadge.className = 'method-status';
+    tsStatus.className = 'status-badge offline';
+    tsStatus.textContent = 'Not Installed';
+  }
+  
+  tsAddress.textContent = address || '-';
+  
+  // Show/hide copy button
+  btnCopyTs.style.display = address ? 'inline-block' : 'none';
+  
+  // Show/hide buttons
+  btnInstallTailscale.style.display = !installed ? 'inline-block' : 'none';
+  btnStartTailscale.style.display = installed && !running ? 'inline-block' : 'none';
+  btnStopTailscale.style.display = installed && running ? 'inline-block' : 'none';
+}
+
+// ===========================================================================
+// LAN Functions
+// ===========================================================================
+
+function updateLanStatus(info) {
+  const addresses = info.addresses || [];
+  
+  if (addresses.length > 0) {
+    lanStatusBadge.textContent = 'Active';
+    lanStatusBadge.className = 'method-status';
+    renderLanAddresses(addresses);
+  } else {
+    lanStatusBadge.textContent = 'No IPs';
+    lanStatusBadge.className = 'method-status';
+    lanAddressesList.innerHTML = '<span style="color: var(--text-muted);">No local IP addresses detected</span>';
+  }
+}
+
+function renderLanAddresses(addresses) {
+  lanAddressesList.innerHTML = '';
+  
+  addresses.forEach(ip => {
+    const item = document.createElement('div');
+    item.className = 'lan-address-item';
+    item.innerHTML = `
+      ${ip.address}
+      <span class="lan-interface">(${ip.interface})</span>
+    `;
+    lanAddressesList.appendChild(item);
+  });
+}
+
+// ===========================================================================
+// Port Forwarding Functions
+// ===========================================================================
+
+function updatePortForwardingStatus(info) {
+  const publicIP = info.publicIP || '';
+  const address = info.address || '';
+  const localOpen = info.localPortOpen || false;
+  const externalPort = info.externalPort || 25565;
+  const internalPort = info.internalPort || 25565;
+  
+  pfPublicIp.textContent = publicIP || 'Detecting...';
+  pfAddress.textContent = address || '-';
+  
+  // Update displays
+  pfExternalDisplay.textContent = externalPort;
+  pfInternalDisplay.textContent = internalPort;
+  
+  // Update local IP
+  const localIPs = networkingStatus?.lan?.addresses || [];
+  if (localIPs.length > 0) {
+    pfLocalIp.textContent = localIPs[0].address;
+  }
+  
+  // Status
+  if (localOpen) {
+    pfLocalStatus.className = 'status-badge online';
+    pfLocalStatus.textContent = 'Port Open';
+  } else {
+    pfLocalStatus.className = 'status-badge offline';
+    pfLocalStatus.textContent = 'Port Closed';
+  }
+  
+  // Show/hide copy buttons
+  btnCopyPfIp.style.display = publicIP ? 'inline-block' : 'none';
+  btnCopyPf.style.display = address ? 'inline-block' : 'none';
+  
+  pfStatusBadge.textContent = publicIP ? 'Configured' : 'Detecting...';
+}
+
+// ===========================================================================
+// Playit.gg Functions
+// ===========================================================================
+
+function updatePlayitStatus(info) {
+  const installed = info.installed || false;
+  const running = info.running || false;
+  const address = info.address || '';
+  const status = info.status || 'unknown';
+  
+  // Update badge
+  if (installed && running && address) {
+    pgStatusBadge.textContent = 'Online';
+    pgStatusBadge.className = 'method-status';
+    pgStatus.className = 'status-badge online';
+    pgStatus.textContent = 'Connected';
+  } else if (installed && running) {
+    pgStatusBadge.textContent = 'Running';
+    pgStatusBadge.className = 'method-status';
+    pgStatus.className = 'status-badge online';
+    pgStatus.textContent = 'Running';
+  } else if (installed) {
+    pgStatusBadge.textContent = 'Installed';
+    pgStatusBadge.className = 'method-status';
+    pgStatus.className = 'status-badge offline';
+    pgStatus.textContent = 'Not Running';
+  } else {
+    pgStatusBadge.textContent = 'Not Installed';
+    pgStatusBadge.className = 'method-status';
+    pgStatus.className = 'status-badge offline';
+    pgStatus.textContent = 'Not Installed';
+  }
+  
+  pgAddress.textContent = address || '-';
+  
+  // Show/hide copy button
+  btnCopyPg.style.display = address ? 'inline-block' : 'none';
+  
+  // Show/hide buttons
+  btnInstallPlayit.style.display = !installed ? 'inline-block' : 'none';
+  btnStartPlayit.style.display = installed && !running ? 'inline-block' : 'none';
+}
+
+// ===========================================================================
+// Manual Functions
+// ===========================================================================
+
+function updateManualStatus(info) {
+  const address = info.address || '';
+  
+  if (address) {
+    manualStatusBadge.textContent = 'Configured';
+    manualStatusBadge.className = 'method-status';
+  } else {
+    manualStatusBadge.textContent = 'Not Configured';
+    manualStatusBadge.className = 'method-status';
+  }
+}
+
+async function loadManualAddress() {
+  try {
+    const manual = await window.api.getManualAddress();
+    manualAddress = manual;
+    manualAddressInput.value = manual.address || '';
+    manualNotesInput.value = manual.notes || '';
+    manualSavedAddress.textContent = manual.address || '-';
+    
+    // Show/hide copy button
+    btnCopyManual.style.display = manual.address ? 'inline-block' : 'none';
+    
+    updateManualStatus(manual);
+  } catch (e) {
+    console.error('Failed to load manual address:', e);
+  }
+}
+
+async function saveManualAddress() {
+  const address = manualAddressInput.value.trim();
+  const notes = manualNotesInput.value.trim();
+  
+  try {
+    const result = await window.api.saveManualAddress(address, notes);
+    if (result.success) {
+      manualAddress = { address, notes };
+      manualSavedAddress.textContent = address || '-';
+      btnCopyManual.style.display = address ? 'inline-block' : 'none';
+      updateManualStatus({ address, notes });
+      
+      // Refresh server connections
+      renderServerConnections();
+      
+      alert('Manual address saved successfully!');
+    } else {
+      alert('Failed to save: ' + result.error);
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+// ===========================================================================
+// Server Connections Functions
+// ===========================================================================
+
+async function renderServerConnections() {
+  try {
+    const result = await window.api.getServerProfiles();
+    if (!result.success || Object.keys(result.profiles).length === 0) {
+      serverConnectionsGrid.style.display = 'none';
+      connectionsEmptyState.style.display = 'block';
+      return;
+    }
+    
+    connectionsEmptyState.style.display = 'none';
+    serverConnectionsGrid.style.display = 'grid';
+    serverConnectionsGrid.innerHTML = '';
+    
+    const selectedMethod = serverMethodSelect.value || 'zerotier';
+    const allStatus = await window.api.getAllServersStatus();
+    
+    for (const [serverId, profile] of Object.entries(result.profiles)) {
+      const serverStatus = allStatus.servers?.[serverId] || {};
+      const serverPort = profile.serverPort || 25565;
+      
+      // Get connection address for this server using the selected method
+      const addressResult = await window.api.getServerConnectionAddress(
+        serverId, 
+        serverPort, 
+        selectedMethod
+      );
+      
+      const card = document.createElement('div');
+      card.className = 'server-connection-card';
+      
+      const statusText = serverStatus.state === 'online' ? 'Online' : 
+                        serverStatus.state === 'starting' ? 'Starting...' : 'Offline';
+      const statusClass = serverStatus.state === 'online' ? 'online' : 
+                         serverStatus.state === 'starting' ? 'warning' : 'offline';
+      
+      card.innerHTML = `
+        <div class="server-conn-header">
+          <span class="server-conn-name">${escapeHtml(profile.name || serverId)}</span>
+          <span class="server-conn-status">
+            <span class="status-dot ${statusClass}"></span>
+            ${statusText}
+          </span>
+        </div>
+        <div class="server-conn-address">${addressResult.address || 'N/A'}</div>
+        <div class="server-conn-actions">
+          <button class="btn btn-sm flat-btn btn-copy-server" data-server-id="${serverId}" data-address="${addressResult.address || ''}">Copy</button>
+        </div>
+      `;
+      
+      serverConnectionsGrid.appendChild(card);
+    }
+    
+    // Setup copy button listeners
+    document.querySelectorAll('.btn-copy-server').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const address = btn.dataset.address;
+        if (address) {
+          navigator.clipboard.writeText(address).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+          });
+        }
+      });
+    });
+    
+  } catch (e) {
+    console.error('Failed to render server connections:', e);
+    serverConnectionsGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><h3>Error Loading Connections</h3><p>' + e.message + '</p></div>';
+  }
+}
+
+// ===========================================================================
+// Event Listeners Setup
+// ===========================================================================
+
+function setupNetworkingListeners() {
+  // Method tab switching
+  methodTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      selectMethodTab(tab.dataset.method);
+      currentNetworkingMethod = tab.dataset.method;
+      window.api.selectNetworkingMethod(tab.dataset.method);
+    });
+  });
+  
+  // Server method selector
+  if (serverMethodSelect) {
+    serverMethodSelect.addEventListener('change', () => {
+      renderServerConnections();
+    });
+  }
+  
+  // Copy buttons
+  setupCopyButton(btnCopyZt, ztAddress);
+  setupCopyButton(btnCopyTs, tsAddress);
+  setupCopyButton(btnCopyPfIp, pfPublicIp);
+  setupCopyButton(btnCopyPf, pfAddress);
+  setupCopyButton(btnCopyPg, pgAddress);
+  setupCopyButton(btnCopyManual, manualSavedAddress);
+  
+  // ZeroTier buttons
+  if (btnInstallZerotier) {
+    btnInstallZerotier.addEventListener('click', async () => {
+      if (confirm('Install ZeroTier? This will download and install ZeroTier One on your computer.')) {
+        const result = await window.api.installZeroTier();
+        if (result.success) {
+          alert('ZeroTier installed successfully! Please wait a moment for the service to start.');
+          setTimeout(() => refreshAllNetworkingStatus(), 5000);
+        } else {
+          alert('Failed to install ZeroTier: ' + result.error);
+        }
+      }
+    });
+  }
+  
+  if (btnRefreshZerotier) {
+    btnRefreshZerotier.addEventListener('click', async () => {
+      await refreshAllNetworkingStatus();
+    });
+  }
+  
+  if (btnJoinZtNetwork) {
+    btnJoinZtNetwork.addEventListener('click', async () => {
+      const networkId = ztNetworkId.value.trim();
+      if (!networkId) {
+        alert('Please enter a network ID');
+        return;
+      }
+      
+      const result = await window.api.joinZeroTierNetwork(networkId);
+      if (result.success) {
+        alert('Successfully joined ZeroTier network! The connection may take a moment to establish.');
+        setTimeout(() => refreshAllNetworkingStatus(), 3000);
+      } else {
+        alert('Failed to join network: ' + result.error);
+      }
+    });
+  }
+  
+  // Tailscale buttons
+  if (btnInstallTailscale) {
+    btnInstallTailscale.addEventListener('click', async () => {
+      if (confirm('Install Tailscale? This will download and install Tailscale on your computer.')) {
+        const result = await window.api.installTailscale();
+        if (result.success) {
+          alert(result.message);
+          setTimeout(() => refreshAllNetworkingStatus(), 5000);
+        } else {
+          alert('Failed to install Tailscale: ' + result.error);
+        }
+      }
+    });
+  }
+  
+  if (btnStartTailscale) {
+    btnStartTailscale.addEventListener('click', async () => {
+      const result = await window.api.startTailscale();
+      if (result.success) {
+        alert(result.message);
+        setTimeout(() => refreshAllNetworkingStatus(), 3000);
+      } else {
+        alert('Failed to start Tailscale: ' + result.error);
+      }
+    });
+  }
+  
+  if (btnStopTailscale) {
+    btnStopTailscale.addEventListener('click', async () => {
+      if (confirm('Stop Tailscale? Players currently connected via Tailscale will be disconnected.')) {
+        const result = await window.api.stopTailscale();
+        if (result.success) {
+          alert(result.message);
+          setTimeout(() => refreshAllNetworkingStatus(), 3000);
+        } else {
+          alert('Failed to stop Tailscale: ' + result.error);
+        }
+      }
+    });
+  }
+  
+  if (btnRefreshTailscale) {
+    btnRefreshTailscale.addEventListener('click', async () => {
+      await refreshAllNetworkingStatus();
+    });
+  }
+  
+  // Port Forwarding buttons
+  if (btnRefreshPf) {
+    btnRefreshPf.addEventListener('click', async () => {
+      const externalPort = parseInt(pfExternalPort.value) || 25565;
+      const internalPort = parseInt(pfInternalPort.value) || 25565;
+      const info = await window.api.getPortForwardingInfo(externalPort, internalPort);
+      updatePortForwardingStatus(info);
+    });
+  }
+  
+  // Port inputs - update on change
+  if (pfExternalPort) {
+    pfExternalPort.addEventListener('change', () => {
+      pfExternalDisplay.textContent = pfExternalPort.value;
+    });
+  }
+  
+  if (pfInternalPort) {
+    pfInternalPort.addEventListener('change', () => {
+      pfInternalDisplay.textContent = pfInternalPort.value;
+    });
+  }
+  
+  // Playit.gg buttons
+  if (btnInstallPlayit) {
+    btnInstallPlayit.addEventListener('click', async () => {
+      const result = await window.api.installPlayit();
+      if (result.success) {
+        alert(result.message);
+      } else {
+        alert(result.error);
+      }
+    });
+  }
+  
+  if (btnStartPlayit) {
+    btnStartPlayit.addEventListener('click', async () => {
+      const result = await window.api.startPlayit();
+      if (result.success) {
+        alert(result.message);
+      } else {
+        alert('Failed to start Playit.gg: ' + result.error);
+      }
+    });
+  }
+  
+  if (btnRefreshPlayit) {
+    btnRefreshPlayit.addEventListener('click', async () => {
+      await refreshAllNetworkingStatus();
+    });
+  }
+  
+  // Manual buttons
+  if (btnSaveManual) {
+    btnSaveManual.addEventListener('click', saveManualAddress);
+  }
+}
+
+function setupCopyButton(btn, element) {
+  if (btn && element) {
+    btn.addEventListener('click', () => {
+      const text = element.textContent;
+      if (text && text !== '-') {
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        });
+      }
+    });
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
