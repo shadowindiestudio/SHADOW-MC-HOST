@@ -16,18 +16,24 @@ set "BOT_DIR=%ROOT%mc-bot"
 set "DATA_ROOT=C:\ShadowMCHost"
 set "INSTALL_DIR=%DATA_ROOT%\app"
 set "SERVER_INSTALL_DIR=%DATA_ROOT%\data\servers\Server-1"
+set "DESKTOP_PATH=%USERPROFILE%\Desktop"
 
 :: Color codes for output
-for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do set "DEL=%%b"
+for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do (
+    set "DEL=%%b"
+    set "ESC=%%b"
+)
 
 :: Initialize state
 set "MENU_CHOICE="
 set "SETUP_COMPLETE=0"
 set "JAVA_DETECTED=0"
+set "JAVA_VERSION=Not detected"
+set "NODE_DETECTED=0"
+set "NODE_VERSION=Not detected"
 set "PAPER_DETECTED=0"
 set "VIAVERSION_DETECTED=0"
 set "ZEROTIER_DETECTED=0"
-set "NODE_DETECTED=0"
 set "MANAGER_READY=0"
 
 :: ============================================================================
@@ -41,7 +47,7 @@ call :DetectComponents
 echo.
 echo  ================================================
 echo  MAIN MENU - SHADOW MC HOST SETUP
- echo  ================================================
+echo  ================================================
 echo.
 echo  DETECTION STATUS:
 echo  ------------------------------------------------
@@ -326,16 +332,17 @@ call :DetectManager
 goto :eof
 
 :DetectJava
-set JAVA_DETECTED=0
+set "JAVA_DETECTED=0"
+set "JAVA_VERSION=Not detected"
 where java >nul 2>&1
 if errorlevel 1 (
-    set JAVA_DETECTED=0
+    set "JAVA_DETECTED=0"
     goto :eof
 )
 
 java -version 2>&1 | findstr /R /C:"version \"[2-9][0-9]"" >nul
 if errorlevel 1 (
-    set JAVA_DETECTED=0
+    set "JAVA_DETECTED=0"
     goto :eof
 )
 
@@ -345,20 +352,21 @@ for /f "tokens=3" %%v in ('java -version 2^>^&1 ^| findstr /R /C:"version \"[2-9
     set "java_ver=!java_ver:version=!"
     set "java_ver=!java_ver: =!"
     if "!java_ver!" geq "21" (
-        set JAVA_DETECTED=1
-        set JAVA_VERSION=!java_ver!
+        set "JAVA_DETECTED=1"
+        set "JAVA_VERSION=!java_ver!"
     )
 )
 goto :eof
 
 :DetectNodeJS
-set NODE_DETECTED=0
+set "NODE_DETECTED=0"
+set "NODE_VERSION=Not detected"
 where node >nul 2>&1
 if errorlevel 1 (
-    set NODE_DETECTED=0
+    set "NODE_DETECTED=0"
     goto :eof
 )
-set NODE_DETECTED=1
+set "NODE_DETECTED=1"
 for /f "delims=" %%v in ('node -v') do set "NODE_VERSION=%%v"
 goto :eof
 
@@ -1214,25 +1222,38 @@ echo.
 goto :eof
 
 :ColorText
-set "param= %*"
-set "param=!param: =~"
-for /f "tokens=1,* delims=~" %%a in (!param!) do (
-    set "color=%%a"
-    set "text=%%b"
-)
-<nul set /p "=." > "%temp%\color.tmp"
-if exist "%temp%\color.tmp" del "%temp%\color.tmp"
-if "%color%"=="" (
-    echo %text%
-) else (
-    <nul set /p "=%DEL%" > "%temp%\color.tmp"
-    if exist "%temp%\color.tmp" (
-        <nul set /p "=!color!" > "%temp%\color.tmp"
-        <nul set /p "=%text%" >> "%temp%\color.tmp"
-        type "%temp%\color.tmp"
-        del "%temp%\color.tmp"
+setlocal DisableDelayedExpansion
+set "color=%~1"
+set "text=%~2"
+if not defined text (
+    if "%~2"=="" (
+        if not "%~1"=="" (
+            if /i not "%~1"=="0A" if /i not "%~1"=="0C" if /i not "%~1"=="0E" if /i not "%~1"=="03" if /i not "%~1"=="0B" if /i not "%~1"=="07" (
+                set "text=%~1"
+                set "color=07"
+            )
+        )
     )
 )
+if not defined text (
+    endlocal
+    goto :eof
+)
+
+set "ansi=0m"
+if /i "%color%"=="0A" set "ansi=92m"
+if /i "%color%"=="0C" set "ansi=91m"
+if /i "%color%"=="0E" set "ansi=93m"
+if /i "%color%"=="03" set "ansi=96m"
+if /i "%color%"=="0B" set "ansi=96m"
+if /i "%color%"=="07" set "ansi=0m"
+
+if defined ESC (
+    echo %ESC%[%ansi%%text%%ESC%[0m
+) else (
+    echo %text%
+)
+endlocal
 goto :eof
 
 :DownloadFile
