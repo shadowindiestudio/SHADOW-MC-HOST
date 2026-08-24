@@ -122,10 +122,12 @@ async function checkPrerequisites() {
     checks.node = true;
   } catch (_) {}
 
-  // Check Java 25+
+  // Check Java 21+ — try PATH first, then known install dirs
+  const javaExe = getJavaPath();
   try {
-    const output = execSync('java -version 2>&1', { encoding: 'utf8' });
-    checks.java = output.includes('version "25') || output.includes('version "26');
+    const output = execSync(`"${javaExe}" -version 2>&1`, { encoding: 'utf8' });
+    const m = output.match(/version "(\d+)/);
+    if (m && parseInt(m[1]) >= 21) checks.java = true;
   } catch (_) {}
 
   // Check server.jar
@@ -452,11 +454,12 @@ function resolveExecutable(name) {
 
 /**
  * Resolve java executable.
- * Priority: JAVA_HOME env var => JAVA_PATH in .env => absolute path via `where`
+ * Priority: JAVA_HOME env => JAVA_PATH in .env => PATH => known install dirs
  */
 function getJavaPath() {
   if (process.env.JAVA_HOME) {
-    return path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
+    const p = path.join(process.env.JAVA_HOME, 'bin', 'java.exe');
+    if (fs.existsSync(p)) return p;
   }
   // Check .env for JAVA_PATH
   if (fs.existsSync(BOT_ENV_PATH)) {
@@ -467,7 +470,25 @@ function getJavaPath() {
       }
     } catch (_) {}
   }
-  return resolveExecutable('java');
+  // Try java on PATH
+  try {
+    const found = execSync('where java', { encoding: 'utf8' }).split('\n')[0].trim();
+    if (found) return found;
+  } catch (_) {}
+  // Fallback: known install directories
+  const candidates = [
+    'C:\\Program Files\\Zulu\\zulu-25\\bin\\java.exe',
+    'C:\\Program Files\\Zulu\\zulu-21\\bin\\java.exe',
+    'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.7.6-hotspot\\bin\\java.exe',
+    'C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.8.9-hotspot\\bin\\java.exe',
+    'C:\\Program Files\\Microsoft\\jdk-21.0.7.6-hotspot\\bin\\java.exe',
+    'C:\\Program Files\\Java\\jdk-21\\bin\\java.exe',
+    'C:\\Program Files\\Amazon Corretto\\jdk21.0.7_6\\bin\\java.exe',
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return 'java';
 }
 
 /** Check if a PID is alive and belongs to the given image name */
@@ -1058,22 +1079,8 @@ ipcMain.handle('add-server-profile', (_, profile) => {
   }
 });
 
-ipcMain.handle('remove-server-profile', (_, serverId) => {
-  try {
-    const config = loadServersConfig();
-    if (!config.servers[serverId]) {
-      return { success: false, error: 'Server profile not found' };
-    }
-    delete config.servers[serverId];
-    if (config.settings.defaultServer === serverId) {
-      config.settings.defaultServer = Object.keys(config.servers)[0] || null;
-    }
-    saveServersConfig(config);
-    return { success: true };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
-});
+
+
 
 // ===========================================================================
 // IPC handlers - Manager Settings
@@ -2031,7 +2038,8 @@ ipcMain.handle('remove-server-profile', (_, serverId) => {
 /** Fetch JSON from a URL */
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    const opts = typeof url === 'string' ? { headers: { 'User-Agent': 'ShadowMCHost/1.0' } } : url;
+    https.get(url, opts, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return resolve(fetchJson(res.headers.location));
       }
@@ -2095,32 +2103,39 @@ function downloadFileWithProgress(url, dest, progressChannel, serverId) {
   });
 }
 
-/** Get available Paper versions from PaperMC API */
+/** Get available Paper versions from PaperMC v3 API */
 async function getPaperVersions() {
-  const data = await fetchJson('https://papermc.io/api/v2/projects/paper');
+  const data = await fetchJson('https://fill.papermc.io/v3/projects/paper');
   return { versions: data.versions || [], versionGroups: data.version_groups || [] };
 }
 
-/** Get latest build for a Paper version */
+/** Get latest build for a Paper version using v3 API */
 async function getPaperLatestBuild(version) {
-  const data = await fetchJson(`https://papermc.io/api/v2/projects/paper/versions/${version}`);
-  const builds = data.builds || [];
-  if (builds.length === 0) return null;
-  // Pick the latest build (highest number)
-  const latest = builds[builds.length - 1];
-  return { build: latest.build, download: latest.downloads && latest.downloads.application, version: version };
+  const builds = await fetchJson(`https://fill.papermc.io/v3/projects/paper/versions/${version}/builds`);
+  const arr = Array.isArray(builds) ? builds : [];
+  if (arr.length === 0) return null;
+  // Sort descending, pick latest
+  const latest = arr.sort((a, b) => b.id - a.id)[0];
+  // Download URL is in latest.downloads['server:default'].url
+  let downloadUrl = latest.downloads?.['server:default']?.url;
+  if (!downloadUrl) {
+    // Fallback: find first property with a url
+    for (const key of Object.keys(latest.downloads || {})) {
+      if (latest.downloads[key]?.url) { downloadUrl = latest.downloads[key].url; break; }
+    }
+  }
+  return { build: latest.id, downloadUrl, version };
 }
 
 /** Download Paper JAR for a specific version into a directory */
 async function downloadPaperJar(version, destDir, jarName, progressChannel, serverId) {
   const buildInfo = await getPaperLatestBuild(version);
-  if (!buildInfo || !buildInfo.download) {
+  if (!buildInfo || !buildInfo.downloadUrl) {
     throw new Error(`No Paper build found for version ${version}`);
   }
-  const url = `https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${buildInfo.build}/downloads/${buildInfo.download.filename}`;
   const finalJarName = jarName || `paper-${version}-${buildInfo.build}.jar`;
   const dest = path.join(destDir, finalJarName);
-  await downloadFileWithProgress(url, dest, progressChannel, serverId);
+  await downloadFileWithProgress(buildInfo.downloadUrl, dest, progressChannel, serverId);
   return { jarName: finalJarName, build: buildInfo.build, version, path: dest };
 }
 

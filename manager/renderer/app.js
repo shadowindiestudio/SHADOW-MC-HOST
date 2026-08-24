@@ -436,7 +436,7 @@ btnStopBot.addEventListener('click', async () => {
 });
 
 // ===========================================================================
-// Live stats (TPS + player list) — polled every 10 s via RCON
+// Live stats (TPS + player list) -- polled every 10 s via RCON
 // ===========================================================================
 async function fetchLiveStats() {
   if (serverStatus !== 'online') {
@@ -506,7 +506,7 @@ setInterval(fetchLiveStats, 10000);
 setTimeout(fetchLiveStats, 5000);
 
 // ===========================================================================
-// Console — log streaming
+// Console -- log streaming
 // ===========================================================================
 let autoScrollServer = true;
 let autoScrollBot    = true;

@@ -10,13 +10,16 @@ cd /d "%~dp0"
 :: ============================================================================
 
 set "ROOT=%~dp0"
-set "SERVER_DIR=%ROOT%server"
-set "MANAGER_DIR=%ROOT%manager"
-set "BOT_DIR=%ROOT%mc-bot"
+if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
+set "SERVER_DIR=%ROOT%\server"
+set "MANAGER_DIR=%ROOT%\manager"
+set "BOT_DIR=%ROOT%\mc-bot"
 set "DATA_ROOT=C:\ShadowMCHost"
 set "INSTALL_DIR=%DATA_ROOT%\app"
 set "SERVER_INSTALL_DIR=%DATA_ROOT%\data\servers\Server-1"
-set "DESKTOP_PATH=%USERPROFILE%\Desktop"
+
+:: Get correct Desktop path (handles OneDrive redirection)
+for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP_PATH=%%D"
 
 :: Color codes for output
 for /f "tokens=1,2 delims=#" %%a in ('"prompt #$H#$E# & echo on & for %%b in (1) do rem"') do (
@@ -29,6 +32,7 @@ set "MENU_CHOICE="
 set "SETUP_COMPLETE=0"
 set "JAVA_DETECTED=0"
 set "JAVA_VERSION=Not detected"
+set "JAVA_EXE=java"
 set "NODE_DETECTED=0"
 set "NODE_VERSION=Not detected"
 set "PAPER_DETECTED=0"
@@ -334,28 +338,59 @@ goto :eof
 :DetectJava
 set "JAVA_DETECTED=0"
 set "JAVA_VERSION=Not detected"
+set "JAVA_EXE=java"
+
+:: First try java on PATH
 where java >nul 2>&1
-if errorlevel 1 (
-    set "JAVA_DETECTED=0"
-    goto :eof
+if not errorlevel 1 (
+    set "JAVA_EXE=java"
+    goto :CheckJavaVersion
 )
 
-java -version 2>&1 | findstr /R /C:"version \"[2-9][0-9]"" >nul
-if errorlevel 1 (
-    set "JAVA_DETECTED=0"
-    goto :eof
+:: Fallback: search common installation directories
+for %%D in (
+    "C:\Program Files\Zulu\zulu-25\bin\java.exe"
+    "C:\Program Files\Zulu\zulu-21\bin\java.exe"
+    "C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot\bin\java.exe"
+    "C:\Program Files\Eclipse Adoptium\jdk-21.0.8.9-hotspot\bin\java.exe"
+    "C:\Program Files\Microsoft\jdk-21.0.7.6-hotspot\bin\java.exe"
+    "C:\Program Files\Java\jdk-21\bin\java.exe"
+    "C:\Program Files\Java\jdk-25\bin\java.exe"
+    "C:\Program Files\Amazon Corretto\jdk21.0.7_6\bin\java.exe"
+) do (
+    if exist %%D (
+        set "JAVA_EXE=%%~D"
+        goto :CheckJavaVersion
+    )
 )
 
-for /f "tokens=3" %%v in ('java -version 2^>^&1 ^| findstr /R /C:"version \"[2-9][0-9]""') do (
-    set "java_ver=%%v"
+:: Also try JAVA_HOME if set
+if defined JAVA_HOME (
+    if exist "%JAVA_HOME%\bin\java.exe" (
+        set "JAVA_EXE=%JAVA_HOME%\bin\java.exe"
+        goto :CheckJavaVersion
+    )
+)
+
+goto :eof
+
+:CheckJavaVersion
+:: Run java -version and capture output to temp file
+set "JAVA_VER_TMP=%TEMP%\smh_jver_%RANDOM%.txt"
+"%JAVA_EXE%" -version >"%JAVA_VER_TMP%" 2>&1
+
+:: Extract version number — version line is: openjdk version "25.0.4.1" ...
+for /f "tokens=3 delims= " %%V in ('findstr "version" "%JAVA_VER_TMP%"') do (
+    set "java_ver=%%V"
     set "java_ver=!java_ver:"=!"
-    set "java_ver=!java_ver:version=!"
-    set "java_ver=!java_ver: =!"
-    if "!java_ver!" geq "21" (
+    :: Extract major version (before first dot)
+    for /f "tokens=1 delims=." %%M in ("!java_ver!") do set "java_major=%%M"
+    if !java_major! geq 21 (
         set "JAVA_DETECTED=1"
         set "JAVA_VERSION=!java_ver!"
     )
 )
+del "%JAVA_VER_TMP%" >nul 2>&1
 goto :eof
 
 :DetectNodeJS
@@ -371,13 +406,13 @@ for /f "delims=" %%v in ('node -v') do set "NODE_VERSION=%%v"
 goto :eof
 
 :DetectPaperServer
-set PAPER_DETECTED=0
+set "PAPER_DETECTED=0"
 if exist "%SERVER_DIR%\server.jar" (
-    set PAPER_DETECTED=1
+    set "PAPER_DETECTED=1"
     goto :eof
 )
 if exist "%SERVER_INSTALL_DIR%\server.jar" (
-    set PAPER_DETECTED=1
+    set "PAPER_DETECTED=1"
     goto :eof
 )
 goto :eof
@@ -395,16 +430,30 @@ if exist "%SERVER_INSTALL_DIR%\plugins\ViaVersion.jar" (
 goto :eof
 
 :DetectZeroTier
-set ZEROTIER_DETECTED=0
-where zerotier-one >nul 2>&1
+set "ZEROTIER_DETECTED=0"
+:: Check if service is running (correct service name is ZeroTierOneService)
+sc query ZeroTierOneService >nul 2>&1
 if not errorlevel 1 (
-    set ZEROTIER_DETECTED=1
+    set "ZEROTIER_DETECTED=1"
+    goto :eof
 )
-:: Also check if service is running
+:: Also try the old service name
 sc query ZeroTierOne >nul 2>&1
 if not errorlevel 1 (
-    set ZEROTIER_DETECTED=1
+    set "ZEROTIER_DETECTED=1"
+    goto :eof
 )
+:: Check known install paths
+if exist "C:\Program Files (x86)\ZeroTier\One\zerotier-one_x64.exe" (
+    set "ZEROTIER_DETECTED=1"
+    goto :eof
+)
+if exist "C:\Program Files\ZeroTier\One\zerotier-one_x64.exe" (
+    set "ZEROTIER_DETECTED=1"
+    goto :eof
+)
+where zerotier-one >nul 2>&1
+if not errorlevel 1 set "ZEROTIER_DETECTED=1"
 goto :eof
 
 :DetectManager
@@ -417,39 +466,39 @@ goto :eof
 :PrintDetectionStatus
 :: Print detection status with checkmarks
 if %JAVA_DETECTED%==1 (
-    call :ColorText 0A "[✓] Java %JAVA_VERSION% detected"
+    call :ColorText 0A "[OK] Java %JAVA_VERSION% detected"
 ) else (
-    call :ColorText 0C "[✗] Java 21+ not found"
+    call :ColorText 0C "[--] Java 21+ not found"
 )
 
 if %NODE_DETECTED%==1 (
-    call :ColorText 0A "[✓] Node.js %NODE_VERSION% detected"
+    call :ColorText 0A "[OK] Node.js %NODE_VERSION% detected"
 ) else (
-    call :ColorText 0C "[✗] Node.js not found"
+    call :ColorText 0C "[--] Node.js not found"
 )
 
 if %PAPER_DETECTED%==1 (
-    call :ColorText 0A "[✓] Paper server detected"
+    call :ColorText 0A "[OK] Paper server detected"
 ) else (
-    call :ColorText 0C "[✗] Paper server not found"
+    call :ColorText 0C "[--] Paper server not found"
 )
 
 if %VIAVERSION_DETECTED%==1 (
-    call :ColorText 0A "[✓] ViaVersion detected"
+    call :ColorText 0A "[OK] ViaVersion detected"
 ) else (
     call :ColorText 07 "[ ] ViaVersion not installed"
 )
 
 if %ZEROTIER_DETECTED%==1 (
-    call :ColorText 0A "[✓] ZeroTier detected"
+    call :ColorText 0A "[OK] ZeroTier detected"
 ) else (
     call :ColorText 07 "[ ] ZeroTier not installed"
 )
 
 if %MANAGER_READY%==1 (
-    call :ColorText 0A "[✓] Manager dependencies installed"
+    call :ColorText 0A "[OK] Manager dependencies installed"
 ) else (
-    call :ColorText 0C "[✗] Manager not ready"
+    call :ColorText 0C "[--] Manager not ready"
 )
 
 goto :eof
@@ -638,6 +687,7 @@ set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds
 
 goto DOWNLOAD_PAPER
 
+
 :SELECT_PAPER_VERSION
 echo.
 call :ColorText 07 "Available Paper versions:"
@@ -651,89 +701,53 @@ echo  7. Custom version
 echo.
 set /p "VERSION_CHOICE=Select version (1-7): "
 
-if "%VERSION_CHOICE%"=="1" (
-    set "PAPERMC_VERSION=1.21.4"
-    set "PAPERMC_BUILD=191"
-    set "PAPERMC_JAR=paper-1.21.4-191.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds/191/downloads/paper-1.21.4-191.jar"
-) else if "%VERSION_CHOICE%"=="2" (
-    set "PAPERMC_VERSION=1.21.3"
-    set "PAPERMC_BUILD=177"
-    set "PAPERMC_JAR=paper-1.21.3-177.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.3/builds/177/downloads/paper-1.21.3-177.jar"
-) else if "%VERSION_CHOICE%"=="3" (
-    set "PAPERMC_VERSION=1.21.2"
-    set "PAPERMC_BUILD=164"
-    set "PAPERMC_JAR=paper-1.21.2-164.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.2/builds/164/downloads/paper-1.21.2-164.jar"
-) else if "%VERSION_CHOICE%"=="4" (
-    set "PAPERMC_VERSION=1.21.1"
-    set "PAPERMC_BUILD=151"
-    set "PAPERMC_JAR=paper-1.21.1-151.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.1/builds/151/downloads/paper-1.21.1-151.jar"
-) else if "%VERSION_CHOICE%"=="5" (
-    set "PAPERMC_VERSION=1.21"
-    set "PAPERMC_BUILD=141"
-    set "PAPERMC_JAR=paper-1.21-141.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21/builds/141/downloads/paper-1.21-141.jar"
-) else if "%VERSION_CHOICE%"=="6" (
-    set "PAPERMC_VERSION=1.20.6"
-    set "PAPERMC_BUILD=120"
-    set "PAPERMC_JAR=paper-1.20.6-120.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.20.6/builds/120/downloads/paper-1.20.6-120.jar"
-) else if "%VERSION_CHOICE%"=="7" (
-    set /p "CUSTOM_VERSION=Enter Minecraft version (e.g., 1.20.4): "
-    set /p "CUSTOM_BUILD=Enter build number: "
-    set "PAPERMC_VERSION=%CUSTOM_VERSION%"
-    set "PAPERMC_BUILD=%CUSTOM_BUILD%"
-    set "PAPERMC_JAR=paper-%CUSTOM_VERSION%-%CUSTOM_BUILD%.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/%CUSTOM_VERSION%/builds/%CUSTOM_BUILD%/downloads/paper-%CUSTOM_VERSION%-%CUSTOM_BUILD%.jar"
-) else (
-    set "PAPERMC_VERSION=1.21.4"
-    set "PAPERMC_BUILD=191"
-    set "PAPERMC_JAR=paper-1.21.4-191.jar"
-    set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds/191/downloads/paper-1.21.4-191.jar"
+if "%VERSION_CHOICE%"=="1" set "PAPERMC_VERSION=1.21.4"
+if "%VERSION_CHOICE%"=="2" set "PAPERMC_VERSION=1.21.3"
+if "%VERSION_CHOICE%"=="3" set "PAPERMC_VERSION=1.21.2"
+if "%VERSION_CHOICE%"=="4" set "PAPERMC_VERSION=1.21.1"
+if "%VERSION_CHOICE%"=="5" set "PAPERMC_VERSION=1.21"
+if "%VERSION_CHOICE%"=="6" set "PAPERMC_VERSION=1.20.6"
+if "%VERSION_CHOICE%"=="7" (
+    set /p "PAPERMC_VERSION=Enter Minecraft version (e.g., 1.20.4): "
 )
+if not defined PAPERMC_VERSION set "PAPERMC_VERSION=1.21.4"
 
 :DOWNLOAD_PAPER
-:: Check if server directory exists
 if not exist "%SERVER_DIR%" (
     mkdir "%SERVER_DIR%"
     call :ColorText 0A "Created server directory"
 )
 
-:: Check if server.jar already exists
 if exist "%SERVER_DIR%\server.jar" (
-    call :ColorText 07 "server.jar already exists in repository server folder"
-    call :ColorText 07 "Using existing server.jar"
-    set PAPER_DETECTED=1
+    call :ColorText 07 "server.jar already exists - using existing file"
+    set "PAPER_DETECTED=1"
     goto :eof
 )
 
-:: Download PaperMC
-call :ColorText 07 "Downloading PaperMC %PAPERMC_VERSION% build %PAPERMC_BUILD%..."
-call :DownloadFile "%PAPERMC_URL%" "%SERVER_DIR%\%PAPERMC_JAR%"
+:: Use PaperMC v3 API to resolve and download latest build dynamically
+call :ColorText 07 "Resolving latest PaperMC %PAPERMC_VERSION% build..."
+set "PAPER_API_URL=https://fill.papermc.io/v3/projects/paper/versions/%PAPERMC_VERSION%/builds"
+set "PAPER_DEST=%SERVER_DIR%\server.jar"
 
-if exist "%SERVER_DIR%\%PAPERMC_JAR%" (
-    ren "%SERVER_DIR%\%PAPERMC_JAR%" "server.jar"
-    call :ColorText 0A "PaperMC server downloaded!"
-    set PAPER_DETECTED=1
+powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $wc = New-Object Net.WebClient; $wc.Headers.Add('User-Agent','ShadowMCHost/1.0'); $json = $wc.DownloadString($env:PAPER_API_URL); $builds = ConvertFrom-Json $json; $arr = @($builds); if ($arr.Count -eq 0) { Write-Host 'No builds found'; exit 1 }; $latest = ($arr | Sort-Object id -Descending)[0]; $url = $latest.downloads.'server:default'.url; if (-not $url) { foreach ($p in $latest.downloads.PSObject.Properties) { if ($p.Value.url) { $url = $p.Value.url; break } } }; if (-not $url) { Write-Host 'No download URL in build'; exit 1 }; Write-Host ('Downloading build ' + $latest.id + ' from ' + $url); $wc.DownloadFile($url, $env:PAPER_DEST); exit 0 } catch { Write-Host ('Error: ' + $_.Exception.Message); exit 1 } }"
+
+if exist "%SERVER_DIR%\server.jar" (
+    call :ColorText 0A "[OK] PaperMC %PAPERMC_VERSION% downloaded!"
+    set "PAPER_DETECTED=1"
 ) else (
-    call :ColorText 0C "ERROR: Failed to download PaperMC"
+    call :ColorText 0C "ERROR: Failed to download PaperMC %PAPERMC_VERSION%"
     call :ColorText 07 "Please manually download server.jar from https://papermc.io/downloads"
     exit /b 1
 )
 
-:: Create eula.txt if missing
 if not exist "%SERVER_DIR%\eula.txt" (
     echo eula=true> "%SERVER_DIR%\eula.txt"
     call :ColorText 0A "Created eula.txt"
 )
 
-:: Create server.properties if missing
 if not exist "%SERVER_DIR%\server.properties" (
-    if exist "%ROOT%server.properties" (
-        copy "%ROOT%server.properties" "%SERVER_DIR%\server.properties" >nul
+    if exist "%ROOT%\server.properties" (
+        copy "%ROOT%\server.properties" "%SERVER_DIR%\server.properties" >nul
         call :ColorText 0A "Copied server.properties from template"
     ) else (
         call :CreateDefaultServerProperties
@@ -748,33 +762,31 @@ goto :eof
 :: ============================================================================
 
 :InstallViaVersion
-if not exist "%SERVER_DIR%\plugins" (
-    mkdir "%SERVER_DIR%\plugins"
-)
+if not exist "%SERVER_DIR%\plugins" mkdir "%SERVER_DIR%\plugins"
 
 if exist "%SERVER_DIR%\plugins\ViaVersion.jar" (
     call :ColorText 07 "ViaVersion already installed"
-    set VIAVERSION_DETECTED=1
+    set "VIAVERSION_DETECTED=1"
     goto :eof
 )
 
 call :ColorText 07 "Downloading ViaVersion..."
-set "VV_URL=https://github.com/ViaVersion/ViaVersion/releases/latest/download/ViaVersion.jar"
-call :DownloadFile "%VV_URL%" "%SERVER_DIR%\plugins\ViaVersion.jar"
+set "PLUGIN_GH_URL=https://github.com/ViaVersion/ViaVersion/releases/latest/download/ViaVersion.jar"
+set "PLUGIN_SLUG=viaversion"
+set "PLUGIN_DEST=%SERVER_DIR%\plugins\ViaVersion.jar"
+call :DownloadPlugin
 
 if exist "%SERVER_DIR%\plugins\ViaVersion.jar" (
-    set VIAVERSION_DETECTED=1
-    call :ColorText 0A "ViaVersion installed!"
+    set "VIAVERSION_DETECTED=1"
+    call :ColorText 0A "[OK] ViaVersion installed!"
 ) else (
-    call :ColorText 0E "Failed to download ViaVersion"
+    call :ColorText 0E "[FAIL] Failed to download ViaVersion"
     exit /b 1
 )
 goto :eof
 
 :InstallViaBackwards
-if not exist "%SERVER_DIR%\plugins" (
-    mkdir "%SERVER_DIR%\plugins"
-)
+if not exist "%SERVER_DIR%\plugins" mkdir "%SERVER_DIR%\plugins"
 
 if exist "%SERVER_DIR%\plugins\ViaBackwards.jar" (
     call :ColorText 07 "ViaBackwards already installed"
@@ -782,21 +794,21 @@ if exist "%SERVER_DIR%\plugins\ViaBackwards.jar" (
 )
 
 call :ColorText 07 "Downloading ViaBackwards..."
-set "VB_URL=https://github.com/ViaVersion/ViaBackwards/releases/latest/download/ViaBackwards.jar"
-call :DownloadFile "%VB_URL%" "%SERVER_DIR%\plugins\ViaBackwards.jar"
+set "PLUGIN_GH_URL=https://github.com/ViaVersion/ViaBackwards/releases/latest/download/ViaBackwards.jar"
+set "PLUGIN_SLUG=viabackwards"
+set "PLUGIN_DEST=%SERVER_DIR%\plugins\ViaBackwards.jar"
+call :DownloadPlugin
 
 if exist "%SERVER_DIR%\plugins\ViaBackwards.jar" (
-    call :ColorText 0A "ViaBackwards installed!"
+    call :ColorText 0A "[OK] ViaBackwards installed!"
 ) else (
-    call :ColorText 0E "Failed to download ViaBackwards"
+    call :ColorText 0E "[FAIL] Failed to download ViaBackwards"
     exit /b 1
 )
 goto :eof
 
 :InstallViaRewind
-if not exist "%SERVER_DIR%\plugins" (
-    mkdir "%SERVER_DIR%\plugins"
-)
+if not exist "%SERVER_DIR%\plugins" mkdir "%SERVER_DIR%\plugins"
 
 if exist "%SERVER_DIR%\plugins\ViaRewind.jar" (
     call :ColorText 07 "ViaRewind already installed"
@@ -804,15 +816,23 @@ if exist "%SERVER_DIR%\plugins\ViaRewind.jar" (
 )
 
 call :ColorText 07 "Downloading ViaRewind..."
-set "VR_URL=https://github.com/ViaVersion/ViaRewind/releases/latest/download/ViaRewind.jar"
-call :DownloadFile "%VR_URL%" "%SERVER_DIR%\plugins\ViaRewind.jar"
+set "PLUGIN_GH_URL=https://github.com/ViaVersion/ViaRewind/releases/latest/download/ViaRewind.jar"
+set "PLUGIN_SLUG=viarewind"
+set "PLUGIN_DEST=%SERVER_DIR%\plugins\ViaRewind.jar"
+call :DownloadPlugin
 
 if exist "%SERVER_DIR%\plugins\ViaRewind.jar" (
-    call :ColorText 0A "ViaRewind installed!"
+    call :ColorText 0A "[OK] ViaRewind installed!"
 ) else (
-    call :ColorText 0E "Failed to download ViaRewind"
+    call :ColorText 0E "[FAIL] Failed to download ViaRewind"
     exit /b 1
 )
+goto :eof
+
+:: DownloadPlugin: uses PLUGIN_GH_URL, PLUGIN_SLUG, PLUGIN_DEST
+:: Tries GitHub first, falls back to Modrinth API
+:DownloadPlugin
+powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $wc = New-Object Net.WebClient; $wc.Headers.Add('User-Agent','Mozilla/5.0 (Windows NT 10.0; Win64; x64) ShadowMCHost/1.0'); try { $wc.DownloadFile($env:PLUGIN_GH_URL, $env:PLUGIN_DEST); if ((Get-Item $env:PLUGIN_DEST -ErrorAction SilentlyContinue).Length -gt 1000) { exit 0 } } catch {}; try { $json = $wc.DownloadString('https://api.modrinth.com/v2/project/' + $env:PLUGIN_SLUG + '/version'); $v = ConvertFrom-Json $json; $dl = $v[0].files[0].url; if ($dl) { $wc.DownloadFile($dl, $env:PLUGIN_DEST); if ((Get-Item $env:PLUGIN_DEST -ErrorAction SilentlyContinue).Length -gt 1000) { exit 0 } } } catch {}; exit 1 }"
 goto :eof
 
 :: ============================================================================
@@ -955,41 +975,40 @@ goto :eof
 :: ============================================================================
 
 :CreateDesktopShortcut
-:: Check if Electron launcher exists
 if not exist "%MANAGER_DIR%\node_modules\.bin\electron.cmd" (
     call :ColorText 0E "Electron launcher not found. Please run full setup first."
     exit /b 1
 )
 
-:: Get desktop path
-set "DESKTOP_PATH=%USERPROFILE%\Desktop"
-
-:: Create shortcut using PowerShell
-call :ColorText 07 "Creating desktop shortcut..."
-
-:: Create a launch script first
-if not exist "%ROOT%launch-shadow.bat" (
+:: Ensure launch-shadow.bat launcher exists
+if not exist "%ROOT%\launch-shadow.bat" (
     (
         echo @echo off
         echo cd /d "%MANAGER_DIR%"
-        echo start "" "%%~dp0node_modules\.bin\electron.cmd" .
-    ) > "%ROOT%launch-shadow.bat"
+        echo start "" "node_modules\.bin\electron.cmd" .
+    ) > "%ROOT%\launch-shadow.bat"
 )
 
-:: Use PowerShell to create the shortcut
-powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%DESKTOP_PATH%\Shadow MC Host.lnk'); $Shortcut.TargetPath = '%ROOT%launch-shadow.bat'; $Shortcut.WorkingDirectory = '%ROOT%'; $Shortcut.Description = 'Launch SHADOW MC HOST Manager'; $Shortcut.Save()" >nul 2>&1
+call :ColorText 07 "Creating desktop shortcut..."
 
-if errorlevel 1 (
-    :: Fallback: Create a simple .bat file on desktop
+:: Set env vars so PowerShell can access them without quote/space issues
+set "LNK_PATH=%DESKTOP_PATH%\Shadow MC Host.lnk"
+set "LNK_TARGET=%ROOT%\launch-shadow.bat"
+set "LNK_WORKDIR=%ROOT%"
+
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut($env:LNK_PATH); $s.TargetPath = $env:LNK_TARGET; $s.WorkingDirectory = $env:LNK_WORKDIR; $s.Description = 'Launch Shadow MC Host Manager'; $s.Save()" >nul 2>&1
+
+if exist "%DESKTOP_PATH%\Shadow MC Host.lnk" (
+    call :ColorText 0A "[OK] Desktop shortcut created: Shadow MC Host.lnk"
+) else (
+    :: Fallback: plain .bat launcher on desktop
     (
         echo @echo off
         echo cd /d "%ROOT%"
         echo cd manager
         echo start "" "node_modules\.bin\electron.cmd" .
     ) > "%DESKTOP_PATH%\Shadow MC Host.bat"
-    call :ColorText 0E "Could not create .lnk shortcut, created .bat file instead"
-) else (
-    call :ColorText 0A "Desktop shortcut created: Shadow MC Host.lnk"
+    call :ColorText 0E "Could not create .lnk - created Shadow MC Host.bat on Desktop instead"
 )
 
 goto :eof
@@ -1182,30 +1201,31 @@ goto :eof
 call :ColorText 0E "Uninstalling SHADOW MC HOST..."
 
 :: Remove desktop shortcut
-if exist "%USERPROFILE%\Desktop\Shadow MC Host.lnk" (
-    del "%USERPROFILE%\Desktop\Shadow MC Host.lnk"
+if exist "%DESKTOP_PATH%\Shadow MC Host.lnk" (
+    del "%DESKTOP_PATH%\Shadow MC Host.lnk"
     call :ColorText 0A "Removed desktop shortcut"
 )
-if exist "%USERPROFILE%\Desktop\Shadow MC Host.bat" (
-    del "%USERPROFILE%\Desktop\Shadow MC Host.bat"
-    call :ColorText 0A "Removed desktop bat file"
+if exist "%DESKTOP_PATH%\Shadow MC Host.bat" (
+    del "%DESKTOP_PATH%\Shadow MC Host.bat"
+    call :ColorText 0A "Removed desktop launcher"
 )
 
 :: Remove launch script
-if exist "%ROOT%launch-shadow.bat" (
-    del "%ROOT%launch-shadow.bat"
+if exist "%ROOT%\launch-shadow.bat" (
+    del "%ROOT%\launch-shadow.bat"
     call :ColorText 0A "Removed launch script"
 )
 
-:: Note: We do NOT delete server data (worlds, configs, etc.)
-call :ColorText 07 "Server data preserved in: %SERVER_DIR%"
-call :ColorText 07 "To completely remove, manually delete the repository folder."
-
-:: Remove installed files (if they exist outside repo)
+:: Runtime data is at DATA_ROOT (C:\ShadowMCHost)
+:: App files are at INSTALL_DIR (C:\ShadowMCHost\app)
+:: Server worlds and data are at C:\ShadowMCHost\data\servers — NEVER deleted
 if exist "%INSTALL_DIR%" (
-    call :ColorText 07 "Installed files found at: %INSTALL_DIR%"
-    call :ColorText 07 "To remove installed files, manually delete: %INSTALL_DIR%"
+    call :ColorText 07 "Installed app files: %INSTALL_DIR%"
+    call :ColorText 07 "To remove app files, manually delete: %INSTALL_DIR%"
 )
+
+call :ColorText 0A "NOTE: Server worlds and data are preserved at: %DATA_ROOT%\data\servers"
+call :ColorText 07 "To completely remove all data, manually delete: %DATA_ROOT%"
 
 goto :eof
 

@@ -23,6 +23,10 @@ contextBridge.exposeInMainWorld('api', {
   dangerOpenFolder:     () => ipcRenderer.invoke('danger-open-folder'),
   dangerOpenLogs:       () => ipcRenderer.invoke('danger-open-logs'),
 
+  // Prerequisites check
+  checkPrerequisites:  () => ipcRenderer.invoke('check-prerequisites'),
+  checkprerequisites:  () => ipcRenderer.invoke('check-prerequisites'),
+
   // Console history
   getConsoleHistory: (type) => ipcRenderer.invoke('get-console-history', type),
 

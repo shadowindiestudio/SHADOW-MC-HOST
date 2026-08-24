@@ -2,7 +2,7 @@
   "servers": {
     "default": {
       "name": "Default Server",
-      "rootPath": "..",
+      "rootPath": "../server",
       "botDir": "../mc-bot",
       "serverJar": "server.jar",
       "javaPath": null,
