@@ -2435,7 +2435,7 @@ stopServerProcess = async function() {
   const activeId = getActiveServerId();
   return stopServerById(activeId);
 };
-restartServerProcess = async function() {
+let restartServerProcess = async function() {
   const activeId = getActiveServerId();
   await stopServerById(activeId);
   await new Promise(r => setTimeout(r, 2000));
@@ -2498,6 +2498,120 @@ ipcMain.handle('get-status', async () => {
   }
 
   return status;
+});
+
+// ===========================================================================
+// NETWORKING IPC HANDLERS
+// ===========================================================================
+
+ipcMain.handle('get-all-networking-status', async () => {
+  try {
+    const status = await networking.getAllMethodsStatus();
+    return { success: true, ...status };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('select-networking-method', async (_, method) => {
+  try {
+    const config = networking.loadNetworkingConfig();
+    config.selectedMethod = method;
+    networking.saveNetworkingConfig(config);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('install-zerotier', async () => {
+  try {
+    return await networking.installZeroTier();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('join-zerotier-network', async (_, networkId) => {
+  try {
+    return await networking.joinZeroTierNetwork(networkId);
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('install-tailscale', async () => {
+  try {
+    return await networking.installTailscale();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('start-tailscale', async () => {
+  try {
+    return await networking.startTailscale();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('stop-tailscale', async () => {
+  try {
+    return await networking.stopTailscale();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-port-forwarding-info', async (_, externalPort, internalPort) => {
+  try {
+    const info = await networking.getPortForwardingInfo(internalPort || 25565, externalPort || 25565);
+    return { success: true, ...info };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('install-playit', async () => {
+  try {
+    return await networking.installPlayit();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('start-playit', async () => {
+  try {
+    return await networking.startPlayit();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('save-manual-address', async (_, address, notes) => {
+  try {
+    return await networking.saveManualAddress(address, notes);
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-manual-address', async () => {
+  try {
+    return await networking.getManualAddress();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-server-connection-address', async (_, serverId, serverPort, method) => {
+  try {
+    const address = networking.getServerConnectionAddress(serverId, serverPort, method);
+    return { success: true, address };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
 
 // Cleanup all servers on app quit (append to existing handler)
