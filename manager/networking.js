@@ -58,6 +58,26 @@ const DEFAULT_NETWORKING_CONFIG = {
   serverNetworking: {}
 };
 
+function run(command) {
+  return execSync(command, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+function quotePath(filePath) {
+  return `"${filePath.replace(/"/g, '\\"')}"`;
+}
+
+function findExecutable(name, candidates = []) {
+  try {
+    const command = process.platform === 'win32' ? `where ${name}` : `which ${name}`;
+    const found = run(command).split(/\r?\n/).map(s => s.trim()).find(Boolean);
+    if (found) return found;
+  } catch (_) {}
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return '';
+}
+
 /**
  * Load networking configuration
  */
@@ -113,17 +133,25 @@ function downloadFile(url, dest) {
  * Check if ZeroTier is installed
  */
 async function checkZeroTierInstalled() {
-  try {
-    if (process.platform === 'win32') {
-      const result = execSync('where zerotier-cli 2>nul', { encoding: 'utf8' });
-      return result.trim().length > 0;
-    } else {
-      const result = execSync('which zerotier-cli 2>/dev/null', { encoding: 'utf8' });
-      return result.trim().length > 0;
-    }
-  } catch (e) {
-    return false;
-  }
+  return !!getZeroTierCliPath();
+}
+
+function getZeroTierCliPath() {
+  const candidates = process.platform === 'win32'
+    ? [
+        'C:\\Program Files\\ZeroTier\\One\\zerotier-cli.bat',
+        'C:\\Program Files\\ZeroTier\\One\\zerotier-cli.exe',
+        'C:\\Program Files (x86)\\ZeroTier\\One\\zerotier-cli.bat',
+        'C:\\Program Files (x86)\\ZeroTier\\One\\zerotier-cli.exe'
+      ]
+    : ['/usr/sbin/zerotier-cli', '/usr/local/bin/zerotier-cli', '/usr/bin/zerotier-cli'];
+  return findExecutable('zerotier-cli', candidates);
+}
+
+function runZeroTierCli(args) {
+  const cli = getZeroTierCliPath();
+  if (!cli) throw new Error('ZeroTier CLI not found');
+  return run(`${quotePath(cli)} ${args}`);
 }
 
 /**
@@ -132,15 +160,60 @@ async function checkZeroTierInstalled() {
 async function checkZeroTierRunning() {
   try {
     if (process.platform === 'win32') {
-      const result = execSync('sc query "ZeroTier One"', { encoding: 'utf8' });
-      return result.includes('RUNNING');
+      const result = run('sc query "ZeroTier One"');
+      return /STATE\s*:\s*\d+\s+RUNNING/i.test(result);
     } else {
-      const result = execSync('pgrep -x zerotier-one >/dev/null 2>&1 && echo yes || echo no', { encoding: 'utf8' });
+      const result = run('pgrep -x zerotier-one >/dev/null 2>&1 && echo yes || echo no');
       return result.trim() === 'yes';
     }
   } catch (e) {
     return false;
   }
+}
+
+async function startZeroTier() {
+  try {
+    if (process.platform === 'win32') {
+      await new Promise(resolve => {
+        exec('net start "ZeroTier One"', () => setTimeout(resolve, 2000));
+      });
+    } else {
+      await new Promise(resolve => {
+        exec('sudo service zerotier-one start', () => setTimeout(resolve, 2000));
+      });
+    }
+    const running = await checkZeroTierRunning();
+    return running
+      ? { success: true, message: 'ZeroTier service started' }
+      : { success: false, error: 'ZeroTier service did not start' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function normalizeZeroTierAddress(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/\b(?:10|172|192)\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+  return match ? match[0] : '';
+}
+
+function parseZeroTierNetworks(jsonText) {
+  const data = JSON.parse(jsonText);
+  const networks = Array.isArray(data) ? data : [];
+  let address = '';
+  const parsed = networks.map(netInfo => {
+    const assigned = Array.isArray(netInfo.assignedAddresses) ? netInfo.assignedAddresses : [];
+    const ipv4 = assigned.map(normalizeZeroTierAddress).find(Boolean) || '';
+    if (!address && String(netInfo.status || '').toUpperCase() === 'OK' && ipv4) address = ipv4;
+    return {
+      id: netInfo.id || netInfo.nwid || '',
+      name: netInfo.name || 'Unnamed',
+      status: netInfo.status || 'UNKNOWN',
+      type: netInfo.type || '',
+      address: ipv4
+    };
+  });
+  return { networks: parsed, address };
 }
 
 /**
@@ -160,57 +233,27 @@ async function getZeroTierInfo() {
     
     if (running) {
       try {
-        const result = execSync('zerotier-cli listnetworks', { encoding: 'utf8' });
-        const lines = result.trim().split(/\r?\n/);
-        
-        for (const line of lines) {
-          if (line.includes('OK') || line.includes('200')) {
-            const parts = line.trim().split(/\s+/);
-            if (parts.length >= 3) {
-              const networkId = parts[0];
-              const status = parts.length >= 3 ? parts[2] : '';
-              const name = parts.length >= 2 ? parts[1] : 'Unnamed';
-              networks.push({ id: networkId, name, status });
-              
-              if (status === 'OK' && !address) {
-                // Try to get the ZeroTier IP
-                try {
-                  const ifaceResult = execSync('zerotier-cli listnetworks -j', { encoding: 'utf8' });
-                  const jsonData = JSON.parse(ifaceResult);
-                  for (const net of jsonData) {
-                    if (net.id === networkId && net.assignedAddresses) {
-                      address = net.assignedAddresses[0] || '';
-                      break;
-                    }
-                  }
-                } catch (e) {
-                  // Fallback: try ipconfig on Windows
-                  try {
-                    const ipResult = execSync('ipconfig /all', { encoding: 'utf8' });
-                    const lines = ipResult.split(/\r?\n/);
-                    for (const ipLine of lines) {
-                      if (ipLine.includes('ZeroTier') && ipLine.includes(':')) {
-                        const match = ipLine.match(/(\d+\.\d+\.\d+\.\d+)/);
-                        if (match) {
-                          address = match[1];
-                          break;
-                        }
-                      }
-                    }
-                  } catch (e2) {}
-                }
-              }
-            }
-          }
-        }
+        const parsed = parseZeroTierNetworks(runZeroTierCli('listnetworks -j'));
+        networks = parsed.networks;
+        address = parsed.address;
       } catch (e) {
-        console.log('Could not parse ZeroTier networks:', e.message);
+        console.log('Could not parse ZeroTier JSON networks:', e.message);
+        try {
+          const text = runZeroTierCli('listnetworks');
+          networks = text.trim().split(/\r?\n/)
+            .filter(line => /(?:OK|ACCESS_DENIED|REQUESTING_CONFIGURATION|PORT_ERROR)/i.test(line))
+            .map(line => {
+              const parts = line.trim().split(/\s+/);
+              return { id: parts[2] || parts[0] || '', name: parts[3] || 'Unnamed', status: parts[5] || parts[2] || 'UNKNOWN' };
+            });
+        } catch (_) {}
       }
     }
 
-    return { installed, running, networks, address };
+    const connected = running && networks.some(netInfo => String(netInfo.status || '').toUpperCase() === 'OK' && (netInfo.address || address));
+    return { installed, running, connected, networks, address };
   } catch (e) {
-    return { installed: false, running: false, networks: [], address: '' };
+    return { installed: false, running: false, connected: false, networks: [], address: '' };
   }
 }
 
@@ -256,7 +299,7 @@ async function installZeroTier() {
  */
 async function joinZeroTierNetwork(networkId) {
   try {
-    const result = execSync(`zerotier-cli join ${networkId}`, { encoding: 'utf8' });
+    const result = runZeroTierCli(`join ${networkId}`);
     return { success: true, message: 'Joined ZeroTier network', result };
   } catch (e) {
     return { success: false, error: e.message };
@@ -268,7 +311,7 @@ async function joinZeroTierNetwork(networkId) {
  */
 async function leaveZeroTierNetwork(networkId) {
   try {
-    const result = execSync(`zerotier-cli leave ${networkId}`, { encoding: 'utf8' });
+    const result = runZeroTierCli(`leave ${networkId}`);
     return { success: true, message: 'Left ZeroTier network', result };
   } catch (e) {
     return { success: false, error: e.message };
@@ -691,6 +734,7 @@ function getManualAddress() {
 function getServerConnectionAddress(serverId, serverPort, method = 'zerotier') {
   const config = loadNetworkingConfig();
   const serverConfig = config.serverNetworking[serverId] || {};
+  const localIPs = getLocalIPs();
   
   switch (method) {
     case 'zerotier':
@@ -709,7 +753,6 @@ function getServerConnectionAddress(serverId, serverPort, method = 'zerotier') {
       break;
       
     case 'lan':
-      const localIPs = getLocalIPs();
       if (localIPs.length > 0) {
         return `${localIPs[0].address}:${serverPort}`;
       }
@@ -779,6 +822,11 @@ async function getAllMethodsStatus() {
   ]);
   
   const manualInfo = getManualAddress();
+  const updatedConfig = loadNetworkingConfig();
+  updatedConfig.methods.zerotier = { ...updatedConfig.methods.zerotier, ...ztInfo };
+  updatedConfig.methods.tailscale = { ...updatedConfig.methods.tailscale, ...tsInfo };
+  updatedConfig.methods.portForwarding = { ...updatedConfig.methods.portForwarding, ...pfInfo };
+  saveNetworkingConfig(updatedConfig);
   
   return {
     zerotier: {
@@ -825,6 +873,7 @@ module.exports = {
   checkZeroTierRunning,
   getZeroTierInfo,
   installZeroTier,
+  startZeroTier,
   joinZeroTierNetwork,
   leaveZeroTierNetwork,
   

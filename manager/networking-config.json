@@ -1,0 +1,45 @@
+{
+  "selectedMethod": "zerotier",
+  "methods": {
+    "zerotier": {
+      "enabled": true,
+      "installed": false,
+      "networkId": "",
+      "address": "",
+      "autoInstall": true,
+      "status": "unknown"
+    },
+    "tailscale": {
+      "enabled": true,
+      "installed": false,
+      "address": "",
+      "autoInstall": true,
+      "status": "unknown"
+    },
+    "lan": {
+      "enabled": true,
+      "addresses": [],
+      "status": "detecting"
+    },
+    "portForwarding": {
+      "enabled": true,
+      "externalPort": 25565,
+      "internalPort": 25565,
+      "protocol": "TCP",
+      "status": "unknown"
+    },
+    "playitgg": {
+      "enabled": true,
+      "installed": false,
+      "address": "",
+      "autoInstall": true,
+      "status": "unknown"
+    },
+    "manual": {
+      "enabled": true,
+      "address": "",
+      "notes": ""
+    }
+  },
+  "serverNetworking": {}
+}

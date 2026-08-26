@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld('api', {
   getAllNetworkingStatus:    ()                         => ipcRenderer.invoke('get-all-networking-status'),
   selectNetworkingMethod:    (method)                   => ipcRenderer.invoke('select-networking-method', method),
   installZeroTier:           ()                         => ipcRenderer.invoke('install-zerotier'),
+  startZeroTier:             ()                         => ipcRenderer.invoke('start-zerotier'),
   joinZeroTierNetwork:       (networkId)                => ipcRenderer.invoke('join-zerotier-network', networkId),
   installTailscale:          ()                         => ipcRenderer.invoke('install-tailscale'),
   startTailscale:             ()                         => ipcRenderer.invoke('start-tailscale'),

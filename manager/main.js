@@ -130,8 +130,10 @@ async function checkPrerequisites() {
     if (m && parseInt(m[1]) >= 21) checks.java = true;
   } catch (_) {}
 
-  // Check server.jar
-  checks.serverJar = fs.existsSync(path.join(SERVER_DIR, 'server.jar'));
+  // Check the active profile's resolved server JAR.
+  const activeId = getActiveServerId();
+  const jar = resolveServerJar(activeId);
+  checks.serverJar = !!jar.absolutePath;
 
   // Check npm dependencies
   checks.dependencies = fs.existsSync(path.join(__dirname, 'node_modules')) &&
@@ -360,6 +362,12 @@ function saveManagerSettings(settings) {
 
 /** Read current config values for the Settings panel */
 function readConfig() {
+  const activeId = getActiveServerId();
+  const server = getServerConfig(activeId);
+  const serverPropertiesPath = getServerPropertiesPath(activeId);
+  const botEnvPath = server && server.botDir
+    ? path.join(path.resolve(__dirname, server.botDir), '.env')
+    : BOT_ENV_PATH;
   const result = {
     maxPlayers: 10,
     viewDistance: 10,
@@ -371,9 +379,9 @@ function readConfig() {
   };
 
   // server.properties
-  if (fs.existsSync(SERVER_PROPERTIES_PATH)) {
+  if (fs.existsSync(serverPropertiesPath)) {
     try {
-      const props = parseProperties(fs.readFileSync(SERVER_PROPERTIES_PATH, 'utf8'));
+      const props = parseProperties(fs.readFileSync(serverPropertiesPath, 'utf8'));
       result.maxPlayers        = parseInt(props['max-players']         || '10', 10);
       result.viewDistance      = parseInt(props['view-distance']       || '10', 10);
       result.simulationDistance = parseInt(props['simulation-distance'] || '10', 10);
@@ -386,9 +394,9 @@ function readConfig() {
   }
 
   // .env
-  if (fs.existsSync(BOT_ENV_PATH)) {
+  if (fs.existsSync(botEnvPath)) {
     try {
-      const env = parseEnv(fs.readFileSync(BOT_ENV_PATH, 'utf8'));
+      const env = parseEnv(fs.readFileSync(botEnvPath, 'utf8'));
       result.discordToken  = env['TOKEN']         || '';
       if (!result.rconPassword) result.rconPassword = env['RCON_PASSWORD'] || '';
     } catch (e) {
@@ -396,16 +404,7 @@ function readConfig() {
     }
   }
 
-  // RAM from start.bat
-  if (fs.existsSync(START_BAT_PATH)) {
-    try {
-      const content = fs.readFileSync(START_BAT_PATH, 'utf8');
-      const m = content.match(/-Xmx(\d+[GgMm])/);
-      if (m) result.maxRam = m[1].toUpperCase();
-    } catch (e) {
-      console.error('readConfig: error reading start.bat:', e.message);
-    }
-  }
+  if (server && server.maxRam) result.maxRam = server.maxRam;
 
   return result;
 }
@@ -932,7 +931,7 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null; });
 
   // Start log tailers immediately (they create the files if missing)
-  const st = new LogTailer(SERVER_LOG_PATH, 'server-log');
+  const st = new LogTailer(getServerLogPath(getActiveServerId()), 'server-log');
   st.start();
   activeTailers.push(st);
 
@@ -1508,35 +1507,41 @@ ipcMain.handle('read-settings', () => {
 
 ipcMain.handle('save-settings', (_, settings) => {
   try {
+    const activeId = getActiveServerId();
+    const activeServer = getServerConfig(activeId);
+    const serverPropertiesPath = getServerPropertiesPath(activeId);
+    const botEnvPath = activeServer && activeServer.botDir
+      ? path.join(path.resolve(__dirname, activeServer.botDir), '.env')
+      : BOT_ENV_PATH;
+
     // Save manager settings
     saveManagerSettings(settings);
 
     // server.properties
-    if (fs.existsSync(SERVER_PROPERTIES_PATH)) {
+    if (fs.existsSync(serverPropertiesPath)) {
       const upd = {};
       if (settings.maxPlayers        != null) upd['max-players']          = settings.maxPlayers;
       if (settings.viewDistance       != null) upd['view-distance']        = settings.viewDistance;
       if (settings.simulationDistance != null) upd['simulation-distance']  = settings.simulationDistance;
       if (settings.motd               != null) upd['motd']                 = encodeMotd(settings.motd);
       if (settings.rconPassword       != null) upd['rcon.password']        = settings.rconPassword;
-      if (Object.keys(upd).length)             updatePropertiesFile(SERVER_PROPERTIES_PATH, upd);
+      if (Object.keys(upd).length)             updatePropertiesFile(serverPropertiesPath, upd);
     }
 
     // .env
-    if (fs.existsSync(BOT_ENV_PATH)) {
+    if (fs.existsSync(botEnvPath)) {
       const upd = {};
       if (settings.discordToken != null) upd['TOKEN']         = settings.discordToken;
       if (settings.rconPassword != null) upd['RCON_PASSWORD'] = settings.rconPassword;
-      if (Object.keys(upd).length)       updatePropertiesFile(BOT_ENV_PATH, upd);
+      if (Object.keys(upd).length)       updatePropertiesFile(botEnvPath, upd);
     }
 
-    // start.bat — only update Xmx/Xms
-    if (settings.maxRam && /^\d+[GgMm]$/i.test(settings.maxRam.trim()) && fs.existsSync(START_BAT_PATH)) {
+    // Persist RAM on the active server profile.
+    if (settings.maxRam && /^\d+[GgMm]$/i.test(settings.maxRam.trim()) && activeServer) {
       const ram = settings.maxRam.trim().toUpperCase();
-      let bat = fs.readFileSync(START_BAT_PATH, 'utf8');
-      bat = bat.replace(/-Xmx\d+[GgMm]/gi, `-Xmx${ram}`)
-               .replace(/-Xms\d+[GgMm]/gi, `-Xms${ram}`);
-      fs.writeFileSync(START_BAT_PATH, bat, 'utf8');
+      const config = loadServersConfig();
+      config.servers[activeId].maxRam = ram;
+      saveServersConfig(config);
     }
 
     return { success: true };
@@ -1548,7 +1553,8 @@ ipcMain.handle('save-settings', (_, settings) => {
 // 5. Danger zone
 ipcMain.handle('danger-reset-whitelist', async () => {
   try {
-    fs.writeFileSync(path.join(SERVER_DIR, 'whitelist.json'), '[]', 'utf8');
+    const activeId = getActiveServerId();
+    fs.writeFileSync(path.join(getServerDirectory(activeId), 'whitelist.json'), '[]', 'utf8');
     if (rconConnected && rcon) {
       await sendRconCommand('whitelist reload');
       return { success: true, message: 'Whitelist reset and reloaded via RCON.' };
@@ -1560,21 +1566,22 @@ ipcMain.handle('danger-reset-whitelist', async () => {
 });
 
 ipcMain.handle('danger-open-folder', () => {
-  shell.openPath(SERVER_DIR);
+  shell.openPath(getServerDirectory(getActiveServerId()));
   return { success: true };
 });
 
 ipcMain.handle('danger-open-logs', () => {
-  if (!fs.existsSync(SERVER_LOG_PATH)) {
+  const logPath = getServerLogPath(getActiveServerId());
+  if (!fs.existsSync(logPath)) {
     return { success: false, error: 'logs/latest.log does not exist yet.' };
   }
-  exec(`notepad.exe "${SERVER_LOG_PATH}"`);
+  exec(`notepad.exe "${logPath}"`);
   return { success: true };
 });
 
 // 6. Console history
 ipcMain.handle('get-console-history', (_, type) => {
-  return readLastLines(type === 'server' ? SERVER_LOG_PATH : BOT_LOG_PATH, 100);
+  return readLastLines(type === 'server' ? getServerLogPath(getActiveServerId()) : BOT_LOG_PATH, 100);
 });
 
 // 7. Bot command tracking (called from renderer via preload)
@@ -1642,20 +1649,12 @@ function getServerPidPath(serverId) {
 
 /** Get log path for server */
 function getServerLogPath(serverId) {
-  const server = getServerConfig(serverId);
-  if (server && server.rootPath) {
-    return path.join(path.resolve(__dirname, server.rootPath), 'logs', 'latest.log');
-  }
-  return SERVER_LOG_PATH;
+  return path.join(getServerDirectory(serverId), 'logs', 'latest.log');
 }
 
 /** Get properties path for server */
 function getServerPropertiesPath(serverId) {
-  const server = getServerConfig(serverId);
-  if (server && server.rootPath) {
-    return path.join(path.resolve(__dirname, server.rootPath), 'server.properties');
-  }
-  return SERVER_PROPERTIES_PATH;
+  return path.join(getServerDirectory(serverId), 'server.properties');
 }
 
 /** Get server directory */
@@ -1665,6 +1664,66 @@ function getServerDirectory(serverId) {
     return path.resolve(__dirname, server.rootPath);
   }
   return SERVER_DIR;
+}
+
+function persistResolvedServerJar(serverId, jarName) {
+  if (!serverId || !jarName) return;
+  const config = loadServersConfig();
+  if (!config.servers[serverId]) return;
+  if (config.servers[serverId].serverJar === jarName) return;
+  config.servers[serverId].serverJar = jarName;
+  saveServersConfig(config);
+}
+
+function appendServerLog(serverId, line) {
+  const logPath = getServerLogPath(serverId);
+  try {
+    const logDir = path.dirname(logPath);
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(logPath, line.endsWith('\n') ? line : `${line}\n`, 'utf8');
+  } catch (e) {
+    console.error(`Could not write server log for ${serverId}:`, e.message);
+  }
+  send('server-log', line.replace(/\r?\n$/, ''));
+}
+
+function attachProcessOutput(child, serverId) {
+  const wire = (stream, prefix = '') => {
+    if (!stream) return;
+    let buffer = '';
+    stream.setEncoding('utf8');
+    stream.on('data', chunk => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.trim()) appendServerLog(serverId, prefix ? `${prefix}${line}` : line);
+      }
+    });
+    stream.on('end', () => {
+      if (buffer.trim()) appendServerLog(serverId, prefix ? `${prefix}${buffer}` : buffer);
+      buffer = '';
+    });
+  };
+  wire(child.stdout);
+  wire(child.stderr, '[stderr] ');
+}
+
+function waitForEarlyExit(child, timeoutMs) {
+  return new Promise(resolve => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(null);
+    }, timeoutMs);
+    child.once('exit', (code, signal) => {
+      if (settled) return;
+      clearTimeout(timer);
+      settled = true;
+      resolve({ code, signal });
+    });
+  });
 }
 
 /** Check if PID is running */
@@ -1746,6 +1805,7 @@ async function startServerById(serverId) {
   try {
     const javaExe = getServerJavaPath(serverId);
     const serverRoot = getServerDirectory(serverId);
+    const managerSettings = readManagerSettings();
     const maxRam = server.maxRam || '4G';
     const serverPort = server.serverPort || 25565;
 
@@ -1754,6 +1814,7 @@ async function startServerById(serverId) {
     let serverJar = server.serverJar || 'server.jar';
     if (jarResolution.jar) {
       serverJar = jarResolution.jar;
+      persistResolvedServerJar(serverId, serverJar);
     } else if (jarResolution.needsSelection) {
       return {
         success: false,
@@ -1765,6 +1826,10 @@ async function startServerById(serverId) {
       return { success: false, error: jarResolution.error };
     }
 
+    const jarArg = jarResolution.absolutePath &&
+      path.dirname(jarResolution.absolutePath).toLowerCase() !== serverRoot.toLowerCase()
+      ? jarResolution.absolutePath
+      : serverJar;
     const args = [
       `-Xms${maxRam}`, `-Xmx${maxRam}`,
       '-XX:+UseG1GC', '-XX:+ParallelRefProcEnabled', '-XX:MaxGCPauseMillis=200',
@@ -1776,27 +1841,50 @@ async function startServerById(serverId) {
       '-XX:G1RSetUpdatingPauseTimePercent=5', '-XX:SurvivorRatio=32',
       '-XX:+PerfDisableSharedMem', '-XX:MaxTenuringThreshold=1',
       '-Dusing.aikars.flags=https://mcflags.emc.gs', '-Daikars.new.flags=true',
-      '-jar', serverJar, 'nogui'
+      '-jar', jarArg, 'nogui'
     ];
+
+    appendServerLog(serverId, `[System] Launching ${javaExe}`);
+    appendServerLog(serverId, `[System] Working directory: ${serverRoot}`);
+    appendServerLog(serverId, `[System] Server JAR: ${jarResolution.absolutePath || path.join(serverRoot, serverJar)}`);
 
     const child = spawn(javaExe, args, {
       cwd: serverRoot, detached: true, shell: false,
-      stdio: 'ignore', windowsHide: true
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: !managerSettings.showTerminal
     });
-    child.unref();
     if (!child.pid) return { success: false, error: 'spawn() returned undefined PID' };
+    attachProcessOutput(child, serverId);
 
     fs.writeFileSync(pidPath, String(child.pid), 'utf8');
     serverProcesses.set(serverId, {
-      pid: child.pid, serverPort: serverPort,
+      child, pid: child.pid, serverPort: serverPort,
       rconPort: server.rconPort || 25575, rconPassword: server.rconPassword || '',
-      startTime: Date.now(), maxRam: maxRam
+      startTime: Date.now(), maxRam: maxRam,
+      serverRoot, serverJar, resolvedJarPath: jarResolution.absolutePath || path.join(serverRoot, serverJar),
+      state: 'starting'
+    });
+    child.once('exit', (code, signal) => {
+      const state = serverProcesses.get(serverId);
+      appendServerLog(serverId, `[System] Java process exited with code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''}.`);
+      try { fs.unlinkSync(pidPath); } catch (_) {}
+      stopServerRamPolling(serverId);
+      disconnectServerRcon(serverId);
+      if (state && state.state !== 'stopping') {
+        send('status-change', { type: 'server', serverId, state: code === 0 ? 'offline' : 'failed' });
+      } else {
+        send('status-change', { type: 'server', serverId, state: 'offline' });
+      }
+      serverProcesses.delete(serverId);
     });
     startServerRamPolling(serverId);
     scheduleServerRconConnect(serverId);
-    await new Promise(r => setTimeout(r, 500));
+    const earlyExit = await waitForEarlyExit(child, 1500);
+    if (earlyExit) {
+      const msg = `Java exited immediately with code ${earlyExit.code ?? 'null'}${earlyExit.signal ? `, signal ${earlyExit.signal}` : ''}. See the server console for stdout/stderr.`;
+      return { success: false, error: msg };
+    }
     const alive = await isServerPidRunning(child.pid, 'java.exe');
-    if (!alive) return { success: false, error: 'java process exited immediately' };
+    if (!alive) return { success: false, error: 'Java process is not running. See the server console for stdout/stderr.' };
     send('status-change', { type: 'server', serverId, state: 'starting' });
     return { success: true, pid: child.pid, serverId };
   } catch (e) {
@@ -1816,6 +1904,7 @@ async function stopServerById(serverId) {
     return { success: false, error: `Server '${serverId}' is not running` };
   }
   const state = serverProcesses.get(serverId);
+  if (state) state.state = 'stopping';
   send('status-change', { type: 'server', serverId, state: 'stopping' });
   if (state && state.rcon && state.rconConnected) {
     try { await state.rcon.send('stop'); await new Promise(r => setTimeout(r, 8000)); }
@@ -1867,14 +1956,20 @@ function scheduleServerRconConnect(serverId) {
   const server = getServerConfig(serverId);
   const state = serverProcesses.get(serverId);
   if (!server || !state) return;
-  const rconPort = server.rconPort || 25575;
-  const rconPassword = server.rconPassword || '';
+  const propsPath = getServerPropertiesPath(serverId);
+  let props = {};
+  if (fs.existsSync(propsPath)) {
+    try { props = parseProperties(fs.readFileSync(propsPath, 'utf8')); } catch (_) {}
+  }
+  const rconHost = server.rconHost || props['server-ip'] || '127.0.0.1';
+  const rconPort = server.rconPort || parseInt(props['rcon.port'] || '25575', 10);
+  const rconPassword = server.rconPassword || props['rcon.password'] || '';
   if (state.rconTimeoutId) { clearTimeout(state.rconTimeoutId); state.rconTimeoutId = null; }
   state.rconTimeoutId = setTimeout(async () => {
     if (!state) return; state.rconConnected = false;
     if (state.rcon) { try { await state.rcon.end(); } catch (_) {} state.rcon = null; }
     try {
-      const rcon = new Rcon({ host: '127.0.0.1', port: rconPort, password: rconPassword, timeout: 5000 });
+      const rcon = new Rcon({ host: rconHost, port: rconPort, password: rconPassword, timeout: 5000 });
       rcon.on('end', () => { if (state) state.rconConnected = false; });
       rcon.on('error', err => { if (state) state.rconConnected = false; });
       await rcon.connect(); state.rcon = rcon; state.rconConnected = true;
@@ -2197,12 +2292,22 @@ function resolveServerJar(serverId) {
   if (server.serverJar) {
     const jarPath = path.isAbsolute(server.serverJar) ? server.serverJar : path.join(serverDir, server.serverJar);
     if (fs.existsSync(jarPath)) {
-      return { jar: server.serverJar, absolutePath: jarPath };
+      return { jar: path.basename(server.serverJar), absolutePath: jarPath };
     }
   }
 
-  // 2. Detect JARs in the server directory
+  // 2. Prefer the conventional server.jar in this profile directory.
+  const conventionalJar = path.join(serverDir, 'server.jar');
+  if (fs.existsSync(conventionalJar)) {
+    return { jar: 'server.jar', absolutePath: conventionalJar, autoDetected: !server.serverJar };
+  }
+
+  // 3. Detect JARs in the server directory
   const detected = detectServerJars(serverDir);
+  const detectedServerJar = detected.find(j => j.name.toLowerCase() === 'server.jar');
+  if (detectedServerJar) {
+    return { jar: detectedServerJar.name, absolutePath: detectedServerJar.path, autoDetected: !server.serverJar };
+  }
   if (detected.length === 1) {
     // Auto-select the only candidate
     return { jar: detected[0].name, absolutePath: detected[0].path, autoDetected: true };
@@ -2325,7 +2430,9 @@ ipcMain.handle('detect-server-jars', (_, dirPath) => {
 
 ipcMain.handle('resolve-server-jar', (_, serverId) => {
   try {
-    return { success: true, ...resolveServerJar(serverId) };
+    const result = resolveServerJar(serverId);
+    if (result.jar && result.autoDetected) persistResolvedServerJar(serverId, result.jar);
+    return { success: true, ...result };
   } catch (e) { return { success: false, error: e.message }; }
 });
 
@@ -2527,6 +2634,14 @@ ipcMain.handle('select-networking-method', async (_, method) => {
 ipcMain.handle('install-zerotier', async () => {
   try {
     return await networking.installZeroTier();
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('start-zerotier', async () => {
+  try {
+    return await networking.startZeroTier();
   } catch (e) {
     return { success: false, error: e.message };
   }

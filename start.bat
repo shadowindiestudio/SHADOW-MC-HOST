@@ -11,4 +11,4 @@ if not exist "server\server.jar" (
 
 echo eula=true> "server\eula.txt"
 cd /d "%~dp0server"
-java -Xms1G -Xmx2G -jar server.jar nogui
+java -Xms2G -Xmx2G -jar server.jar nogui
