@@ -6,7 +6,8 @@
       "rootPath": "../server",
       "botDir": "../mc-bot",
       "maxRam": "4G",
-      "notes": ""
+      "notes": "",
+      "serverJar": "server.jar"
     }
   },
   "settings": {
