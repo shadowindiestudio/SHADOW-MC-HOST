@@ -133,7 +133,21 @@ function downloadFile(url, dest) {
  * Check if ZeroTier is installed
  */
 async function checkZeroTierInstalled() {
-  return !!getZeroTierCliPath();
+  if (getZeroTierCliPath()) return true;
+  if (process.platform === 'win32') {
+    if (fs.existsSync('C:\\Program Files\\ZeroTier\\One') ||
+        fs.existsSync('C:\\Program Files (x86)\\ZeroTier\\One') ||
+        fs.existsSync('C:\\ProgramData\\ZeroTier\\One')) return true;
+    try {
+      const res = run('sc query ZeroTierOneService');
+      if (res && !res.includes('1060')) return true;
+    } catch (_) {}
+    try {
+      const res2 = run('sc query "ZeroTier One"');
+      if (res2 && !res2.includes('1060')) return true;
+    } catch (_) {}
+  }
+  return false;
 }
 
 function getZeroTierCliPath() {
@@ -160,8 +174,24 @@ function runZeroTierCli(args) {
 async function checkZeroTierRunning() {
   try {
     if (process.platform === 'win32') {
-      const result = run('sc query "ZeroTier One"');
-      return /STATE\s*:\s*\d+\s+RUNNING/i.test(result);
+      try {
+        const result = run('sc query ZeroTierOneService');
+        if (/STATE\s*:\s*\d+\s+RUNNING/i.test(result)) return true;
+      } catch (_) {}
+      try {
+        const result = run('sc query "ZeroTier One"');
+        if (/STATE\s*:\s*\d+\s+RUNNING/i.test(result)) return true;
+      } catch (_) {}
+      // Process fallback
+      try {
+        const r1 = run('tasklist /FI "IMAGENAME eq zerotier-one_x64.exe" /NH');
+        if (r1.toLowerCase().includes('zerotier-one')) return true;
+      } catch (_) {}
+      try {
+        const r2 = run('tasklist /FI "IMAGENAME eq zerotier-one.exe" /NH');
+        if (r2.toLowerCase().includes('zerotier-one')) return true;
+      } catch (_) {}
+      return false;
     } else {
       const result = run('pgrep -x zerotier-one >/dev/null 2>&1 && echo yes || echo no');
       return result.trim() === 'yes';
@@ -175,7 +205,9 @@ async function startZeroTier() {
   try {
     if (process.platform === 'win32') {
       await new Promise(resolve => {
-        exec('net start "ZeroTier One"', () => setTimeout(resolve, 2000));
+        exec('net start ZeroTierOneService', () => {
+          exec('net start "ZeroTier One"', () => setTimeout(resolve, 2000));
+        });
       });
     } else {
       await new Promise(resolve => {
@@ -185,7 +217,7 @@ async function startZeroTier() {
     const running = await checkZeroTierRunning();
     return running
       ? { success: true, message: 'ZeroTier service started' }
-      : { success: false, error: 'ZeroTier service did not start' };
+      : { success: false, error: 'ZeroTier service did not start. Try starting it from Windows Services.' };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -216,6 +248,33 @@ function parseZeroTierNetworks(jsonText) {
   return { networks: parsed, address };
 }
 
+/** Get ZeroTier IPv4 and adapter info from network interfaces */
+function getZeroTierInterfaceInfo() {
+  const ifaces = os.networkInterfaces();
+  let address = '';
+  const networks = [];
+
+  for (const [name, addrs] of Object.entries(ifaces)) {
+    if (/zerotier|zt\w+|zttap/i.test(name)) {
+      const m = name.match(/\[([a-f0-9]{16})\]/i) || name.match(/zt([a-f0-9]{16})/i);
+      const nwid = m ? m[1] : '';
+      const ipv4Info = (addrs || []).find(a => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254'));
+      if (ipv4Info) {
+        if (!address) address = ipv4Info.address;
+        networks.push({
+          id: nwid || 'ZeroTier',
+          name: nwid ? `ZeroTier (${nwid})` : 'ZeroTier Network',
+          status: 'OK',
+          type: 'PRIVATE',
+          address: ipv4Info.address
+        });
+      }
+    }
+  }
+
+  return { address, networks };
+}
+
 /**
  * Get ZeroTier network info
  */
@@ -223,34 +282,53 @@ async function getZeroTierInfo() {
   try {
     const installed = await checkZeroTierInstalled();
     if (!installed) {
-      return { installed: false, running: false, networks: [], address: '' };
+      return { installed: false, running: false, connected: false, networks: [], address: '' };
     }
 
     const running = await checkZeroTierRunning();
-    
+    if (!running) {
+      return { installed: true, running: false, connected: false, networks: [], address: '' };
+    }
+
     let networks = [];
     let address = '';
-    
-    if (running) {
+
+    // First attempt CLI
+    try {
+      const parsed = parseZeroTierNetworks(runZeroTierCli('listnetworks -j'));
+      networks = parsed.networks;
+      address = parsed.address;
+    } catch (e) {
       try {
-        const parsed = parseZeroTierNetworks(runZeroTierCli('listnetworks -j'));
-        networks = parsed.networks;
-        address = parsed.address;
-      } catch (e) {
-        console.log('Could not parse ZeroTier JSON networks:', e.message);
-        try {
-          const text = runZeroTierCli('listnetworks');
-          networks = text.trim().split(/\r?\n/)
-            .filter(line => /(?:OK|ACCESS_DENIED|REQUESTING_CONFIGURATION|PORT_ERROR)/i.test(line))
-            .map(line => {
-              const parts = line.trim().split(/\s+/);
-              return { id: parts[2] || parts[0] || '', name: parts[3] || 'Unnamed', status: parts[5] || parts[2] || 'UNKNOWN' };
-            });
-        } catch (_) {}
+        const text = runZeroTierCli('listnetworks');
+        networks = text.trim().split(/\r?\n/)
+          .filter(line => /(?:OK|ACCESS_DENIED|REQUESTING_CONFIGURATION|PORT_ERROR)/i.test(line))
+          .map(line => {
+            const parts = line.trim().split(/\s+/);
+            const ip = (parts[parts.length - 1] || '').match(/(\d+\.\d+\.\d+\.\d+)/);
+            return {
+              id: parts[2] || parts[0] || '',
+              name: parts[3] || 'Unnamed',
+              status: parts[5] || parts[2] || 'UNKNOWN',
+              address: ip ? ip[1] : ''
+            };
+          });
+        const okNet = networks.find(n => n.status === 'OK' && n.address);
+        if (okNet) address = okNet.address;
+      } catch (_) {}
+    }
+
+    // If CLI returned no networks/address or failed (e.g. non-root permissions on Windows),
+    // query system network adapters directly
+    if (!address || networks.length === 0) {
+      const ifaceInfo = getZeroTierInterfaceInfo();
+      if (ifaceInfo.address) {
+        address = ifaceInfo.address;
+        if (networks.length === 0) networks = ifaceInfo.networks;
       }
     }
 
-    const connected = running && networks.some(netInfo => String(netInfo.status || '').toUpperCase() === 'OK' && (netInfo.address || address));
+    const connected = running && !!address && (networks.length === 0 || networks.some(n => n.status === 'OK'));
     return { installed, running, connected, networks, address };
   } catch (e) {
     return { installed: false, running: false, connected: false, networks: [], address: '' };
@@ -737,13 +815,14 @@ function getServerConnectionAddress(serverId, serverPort, method = 'zerotier') {
   const localIPs = getLocalIPs();
   
   switch (method) {
-    case 'zerotier':
-      // Use ZeroTier address from config or auto-detect
-      const ztInfo = config.methods.zerotier;
-      if (ztInfo.address) {
-        return `${ztInfo.address}:${serverPort}`;
+    case 'zerotier': {
+      // Use ZeroTier address from config or auto-detect from network interfaces
+      const ztAddress = config.methods.zerotier.address || getZeroTierInterfaceInfo().address;
+      if (ztAddress) {
+        return `${ztAddress}:${serverPort}`;
       }
       break;
+    }
       
     case 'tailscale':
       const tsInfo = config.methods.tailscale;
@@ -775,7 +854,6 @@ function getServerConnectionAddress(serverId, serverPort, method = 'zerotier') {
     case 'manual':
       const manual = config.methods.manual;
       if (manual.address) {
-        // If address already includes port, use as-is
         if (manual.address.includes(':')) {
           return manual.address;
         }
@@ -785,7 +863,7 @@ function getServerConnectionAddress(serverId, serverPort, method = 'zerotier') {
   }
   
   // Fallback: try to detect the best method
-  const ztAddress = config.methods.zerotier.address;
+  const ztAddress = config.methods.zerotier.address || getZeroTierInterfaceInfo().address;
   const tsAddress = config.methods.tailscale.address;
   
   if (ztAddress) return `${ztAddress}:${serverPort}`;

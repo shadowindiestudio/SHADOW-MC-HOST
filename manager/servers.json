@@ -1,17 +1,21 @@
 {
   "servers": {
-    "SURVIVAL": {
-      "id": "SURVIVAL",
-      "name": "SHADOW",
+    "default": {
+      "name": "Main Server",
       "rootPath": "../server",
       "botDir": "../mc-bot",
+      "serverJar": "paper-26.2-121.jar",
+      "javaPath": null,
+      "rconHost": "127.0.0.1",
+      "rconPort": 25575,
+      "rconPassword": "",
+      "autoStart": false,
       "maxRam": "4G",
-      "notes": "",
-      "serverJar": "server.jar"
+      "notes": "Primary Minecraft server"
     }
   },
   "settings": {
-    "defaultServer": "SURVIVAL",
+    "defaultServer": "default",
     "showTerminal": false,
     "closeToTray": true,
     "autoStartDefaultServer": false,

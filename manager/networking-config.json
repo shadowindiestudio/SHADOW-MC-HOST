@@ -3,18 +3,30 @@
   "methods": {
     "zerotier": {
       "enabled": true,
-      "installed": false,
+      "installed": true,
       "networkId": "",
-      "address": "",
+      "address": "192.168.193.82",
       "autoInstall": true,
-      "status": "unknown"
+      "status": "unknown",
+      "running": true,
+      "connected": true,
+      "networks": [
+        {
+          "id": "e3918db4834daeae",
+          "name": "ZeroTier (e3918db4834daeae)",
+          "status": "OK",
+          "type": "PRIVATE",
+          "address": "192.168.193.82"
+        }
+      ]
     },
     "tailscale": {
       "enabled": true,
       "installed": false,
       "address": "",
       "autoInstall": true,
-      "status": "unknown"
+      "status": "not_installed",
+      "running": false
     },
     "lan": {
       "enabled": true,
@@ -26,7 +38,10 @@
       "externalPort": 25565,
       "internalPort": 25565,
       "protocol": "TCP",
-      "status": "unknown"
+      "status": "local_ready",
+      "publicIP": "152.57.115.40",
+      "localPortOpen": true,
+      "address": "152.57.115.40:25565"
     },
     "playitgg": {
       "enabled": true,

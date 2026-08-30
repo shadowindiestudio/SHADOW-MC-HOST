@@ -340,6 +340,18 @@ function readManagerSettings() {
   } catch (e) {
     console.error('Error reading manager settings:', e);
   }
+  try {
+    const srvConfig = loadServersConfig();
+    if (srvConfig && srvConfig.settings) {
+      return {
+        ...defaults,
+        showTerminal: !!srvConfig.settings.showTerminal,
+        closeToTray: srvConfig.settings.closeToTray !== false,
+        autoStartServer: !!srvConfig.settings.autoStartDefaultServer,
+        autoStartBot: !!srvConfig.settings.autoStartDefaultBot
+      };
+    }
+  } catch (_) {}
   return defaults;
 }
 
@@ -353,6 +365,19 @@ function saveManagerSettings(settings) {
       autoStartBot: settings.autoStartBot !== undefined ? !!settings.autoStartBot : current.autoStartBot
     };
     fs.writeFileSync(MANAGER_SETTINGS_PATH, JSON.stringify(updated, null, 2), 'utf8');
+
+    // Sync to servers.json
+    try {
+      const srvConfig = loadServersConfig();
+      if (srvConfig && srvConfig.settings) {
+        srvConfig.settings.showTerminal = updated.showTerminal;
+        srvConfig.settings.closeToTray = updated.closeToTray;
+        srvConfig.settings.autoStartDefaultServer = updated.autoStartServer;
+        srvConfig.settings.autoStartDefaultBot = updated.autoStartBot;
+        saveServersConfig(srvConfig);
+      }
+    } catch (_) {}
+
     return true;
   } catch (e) {
     console.error('Error saving manager settings:', e);
@@ -1113,15 +1138,10 @@ ipcMain.handle('check-prerequisites', async () => {
   }
 });
 
-ipcMain.handle('download-papermc', async (_, version = '1.21.4', build = '191') => {
+ipcMain.handle('download-papermc', async (_, version = '1.21.4', build) => {
   try {
-    const url = `https://papermc.io/api/v2/projects/paper/versions/${version}/builds/${build}/downloads/paper-${version}-${build}.jar`;
-    const dest = path.join(SERVER_DIR, 'server.jar');
-    const tempDest = path.join(SERVER_DIR, `paper-${version}-${build}.jar`);
-    
-    await downloadFile(url, tempDest);
-    fs.renameSync(tempDest, dest);
-    return { success: true, message: 'PaperMC downloaded successfully' };
+    const result = await downloadPaperJar(version, SERVER_DIR, 'server.jar');
+    return { success: true, message: 'PaperMC downloaded successfully', ...result };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -2223,7 +2243,30 @@ async function getPaperLatestBuild(version) {
   return { build: latest.id, downloadUrl, version };
 }
 
-/** Download Paper JAR for a specific version into a directory */
+/** Validate that a file is a valid JAR/ZIP archive and has reasonable file size */
+function validateJarFile(filePath, minSizeBytes = 5 * 1024 * 1024) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error('Downloaded file does not exist.');
+  }
+  const stats = fs.statSync(filePath);
+  if (stats.size < minSizeBytes) {
+    let sample = '';
+    try {
+      sample = fs.readFileSync(filePath, 'utf8').slice(0, 200).replace(/\s+/g, ' ');
+    } catch (_) {}
+    throw new Error(`Downloaded file size (${Math.round(stats.size / 1024)} KB) is too small to be a valid Paper server JAR.${sample ? ` Response: "${sample}"` : ''}`);
+  }
+  const buffer = Buffer.alloc(4);
+  const fd = fs.openSync(filePath, 'r');
+  fs.readSync(fd, buffer, 0, 4, 0);
+  fs.closeSync(fd);
+  if (buffer[0] !== 0x50 || buffer[1] !== 0x4B) {
+    throw new Error('Downloaded file is not a valid ZIP/JAR archive (invalid header bytes).');
+  }
+  return true;
+}
+
+/** Download Paper JAR for a specific version into a directory with safety validation */
 async function downloadPaperJar(version, destDir, jarName, progressChannel, serverId) {
   const buildInfo = await getPaperLatestBuild(version);
   if (!buildInfo || !buildInfo.downloadUrl) {
@@ -2231,8 +2274,22 @@ async function downloadPaperJar(version, destDir, jarName, progressChannel, serv
   }
   const finalJarName = jarName || `paper-${version}-${buildInfo.build}.jar`;
   const dest = path.join(destDir, finalJarName);
-  await downloadFileWithProgress(buildInfo.downloadUrl, dest, progressChannel, serverId);
-  return { jarName: finalJarName, build: buildInfo.build, version, path: dest };
+  const tempDest = path.join(destDir, `.tmp-${Date.now()}-${finalJarName}`);
+
+  try {
+    await downloadFileWithProgress(buildInfo.downloadUrl, tempDest, progressChannel, serverId);
+    validateJarFile(tempDest);
+    if (fs.existsSync(dest)) {
+      try { fs.unlinkSync(dest); } catch (_) {}
+    }
+    fs.renameSync(tempDest, dest);
+    return { jarName: finalJarName, build: buildInfo.build, version, path: dest };
+  } catch (err) {
+    if (fs.existsSync(tempDest)) {
+      try { fs.unlinkSync(tempDest); } catch (_) {}
+    }
+    throw new Error(`Paper JAR download failed validation: ${err.message}. Existing server JAR was preserved.`);
+  }
 }
 
 // ===========================================================================

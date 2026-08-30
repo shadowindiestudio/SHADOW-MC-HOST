@@ -411,7 +411,15 @@ if exist "%SERVER_DIR%\server.jar" (
     set "PAPER_DETECTED=1"
     goto :eof
 )
+if exist "%SERVER_DIR%\paper-*.jar" (
+    set "PAPER_DETECTED=1"
+    goto :eof
+)
 if exist "%SERVER_INSTALL_DIR%\server.jar" (
+    set "PAPER_DETECTED=1"
+    goto :eof
+)
+if exist "%SERVER_INSTALL_DIR%\paper-*.jar" (
     set "PAPER_DETECTED=1"
     goto :eof
 )
@@ -723,19 +731,25 @@ if exist "%SERVER_DIR%\server.jar" (
     set "PAPER_DETECTED=1"
     goto :eof
 )
+if exist "%SERVER_DIR%\paper-*.jar" (
+    call :ColorText 07 "Paper server JAR already exists - using existing file"
+    set "PAPER_DETECTED=1"
+    goto :eof
+)
 
-:: Use PaperMC v3 API to resolve and download latest build dynamically
+:: Use PaperMC v3 API to resolve and download latest build dynamically to a temporary file
 call :ColorText 07 "Resolving latest PaperMC %PAPERMC_VERSION% build..."
 set "PAPER_API_URL=https://fill.papermc.io/v3/projects/paper/versions/%PAPERMC_VERSION%/builds"
+set "PAPER_TEMP=%SERVER_DIR%\server.jar.tmp"
 set "PAPER_DEST=%SERVER_DIR%\server.jar"
 
-powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $wc = New-Object Net.WebClient; $wc.Headers.Add('User-Agent','ShadowMCHost/1.0'); $json = $wc.DownloadString($env:PAPER_API_URL); $builds = ConvertFrom-Json $json; $arr = @($builds); if ($arr.Count -eq 0) { Write-Host 'No builds found'; exit 1 }; $latest = ($arr | Sort-Object id -Descending)[0]; $url = $latest.downloads.'server:default'.url; if (-not $url) { foreach ($p in $latest.downloads.PSObject.Properties) { if ($p.Value.url) { $url = $p.Value.url; break } } }; if (-not $url) { Write-Host 'No download URL in build'; exit 1 }; Write-Host ('Downloading build ' + $latest.id + ' from ' + $url); $wc.DownloadFile($url, $env:PAPER_DEST); exit 0 } catch { Write-Host ('Error: ' + $_.Exception.Message); exit 1 } }"
+powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { $wc = New-Object Net.WebClient; $wc.Headers.Add('User-Agent','ShadowMCHost/1.0'); $json = $wc.DownloadString($env:PAPER_API_URL); $builds = ConvertFrom-Json $json; $arr = @($builds); if ($arr.Count -eq 0) { Write-Host 'No builds found'; exit 1 }; $latest = ($arr | Sort-Object id -Descending)[0]; $url = $latest.downloads.'server:default'.url; if (-not $url) { foreach ($p in $latest.downloads.PSObject.Properties) { if ($p.Value.url) { $url = $p.Value.url; break } } }; if (-not $url) { Write-Host 'No download URL in build'; exit 1 }; Write-Host ('Downloading build ' + $latest.id + ' from ' + $url); $wc.DownloadFile($url, $env:PAPER_TEMP); $f = Get-Item $env:PAPER_TEMP; if ($f.Length -lt 5000000) { Write-Host ('Downloaded file size (' + $f.Length + ' bytes) too small for valid server JAR'); if (Test-Path $env:PAPER_TEMP) { Remove-Item $env:PAPER_TEMP -ErrorAction SilentlyContinue }; exit 1 }; $bytes = [System.IO.File]::ReadAllBytes($env:PAPER_TEMP); if ($bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) { Write-Host 'Downloaded file is not a valid ZIP/JAR archive'; if (Test-Path $env:PAPER_TEMP) { Remove-Item $env:PAPER_TEMP -ErrorAction SilentlyContinue }; exit 1 }; Move-Item -Force $env:PAPER_TEMP $env:PAPER_DEST; exit 0 } catch { Write-Host ('Error: ' + $_.Exception.Message); if (Test-Path $env:PAPER_TEMP) { Remove-Item $env:PAPER_TEMP -ErrorAction SilentlyContinue }; exit 1 } }"
 
 if exist "%SERVER_DIR%\server.jar" (
-    call :ColorText 0A "[OK] PaperMC %PAPERMC_VERSION% downloaded!"
+    call :ColorText 0A "[OK] PaperMC %PAPERMC_VERSION% downloaded and verified!"
     set "PAPER_DETECTED=1"
 ) else (
-    call :ColorText 0C "ERROR: Failed to download PaperMC %PAPERMC_VERSION%"
+    call :ColorText 0C "ERROR: Failed to download or validate PaperMC %PAPERMC_VERSION%"
     call :ColorText 07 "Please manually download server.jar from https://papermc.io/downloads"
     exit /b 1
 )

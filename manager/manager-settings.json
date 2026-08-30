@@ -1,6 +1,4 @@
 {
-  "showTerminal": true,
-  "closeToTray": true,
-  "autoStartServer": false,
-  "autoStartBot": false
+  "showTerminal": false,
+  "closeToTray": true
 }

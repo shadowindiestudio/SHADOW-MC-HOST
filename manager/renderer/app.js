@@ -785,6 +785,23 @@ settingsFormEl.addEventListener('submit', async e => {
   setTimeout(() => { settingsStatusMessage.textContent = ''; }, 5000);
 });
 
+// Auto-save app behavior toggles immediately when flipped
+function autoSaveManagerToggles() {
+  const managerUpdates = {
+    showTerminal:    setShowTerminal.checked,
+    closeToTray:     setCloseToTray.checked,
+    autoStartServer: setAutoStartServer.checked,
+    autoStartBot:    setAutoStartBot.checked
+  };
+  window.api.saveManagerSettings(managerUpdates).catch(e => {
+    console.error('Failed to auto-save behavior toggles:', e);
+  });
+}
+
+[setShowTerminal, setCloseToTray, setAutoStartServer, setAutoStartBot].forEach(el => {
+  if (el) el.addEventListener('change', autoSaveManagerToggles);
+});
+
 // ===========================================================================
 // Danger zone
 // ===========================================================================
@@ -1191,6 +1208,7 @@ const ztStatus = document.getElementById('zt-status');
 const ztAddress = document.getElementById('zt-address');
 const btnCopyZt = document.getElementById('btn-copy-zt');
 const btnInstallZerotier = document.getElementById('btn-install-zerotier');
+const btnStartZerotier = document.getElementById('btn-start-zerotier');
 const btnJoinZerotier = document.getElementById('btn-join-zerotier');
 const btnRefreshZerotier = document.getElementById('btn-refresh-zerotier');
 const ztNetworks = document.getElementById('zt-networks');
@@ -1320,28 +1338,29 @@ function selectMethodTab(method) {
 function updateZeroTierStatus(info) {
   const installed = info.installed || false;
   const running = info.running || false;
+  const connected = info.connected || false;
   const address = info.address || '';
   const networks = info.networks || [];
   
-  // Update badge
-  if (installed && running && address) {
-    ztStatusBadge.textContent = 'Online';
-    ztStatusBadge.className = 'method-status';
+  // Update badge and status text
+  if (installed && running && connected && address) {
+    ztStatusBadge.textContent = 'Connected';
+    ztStatusBadge.className = 'method-status online';
     ztStatus.className = 'status-badge online';
     ztStatus.textContent = 'Connected';
   } else if (installed && running) {
-    ztStatusBadge.textContent = 'Running';
-    ztStatusBadge.className = 'method-status';
-    ztStatus.className = 'status-badge online';
-    ztStatus.textContent = 'Running';
+    ztStatusBadge.textContent = 'Running (Not Connected)';
+    ztStatusBadge.className = 'method-status warning';
+    ztStatus.className = 'status-badge warning';
+    ztStatus.textContent = 'Running (Not Connected)';
   } else if (installed) {
-    ztStatusBadge.textContent = 'Installed';
-    ztStatusBadge.className = 'method-status';
+    ztStatusBadge.textContent = 'Service Stopped';
+    ztStatusBadge.className = 'method-status offline';
     ztStatus.className = 'status-badge offline';
-    ztStatus.textContent = 'Not Running';
+    ztStatus.textContent = 'Service Stopped';
   } else {
     ztStatusBadge.textContent = 'Not Installed';
-    ztStatusBadge.className = 'method-status';
+    ztStatusBadge.className = 'method-status offline';
     ztStatus.className = 'status-badge offline';
     ztStatus.textContent = 'Not Installed';
   }
@@ -1355,11 +1374,14 @@ function updateZeroTierStatus(info) {
     btnCopyZt.style.display = 'none';
   }
   
-  // Show/hide install button
+  // Show/hide action buttons
   btnInstallZerotier.style.display = !installed ? 'inline-block' : 'none';
-  btnJoinZerotier.style.display = installed && running && address ? 'inline-block' : 'none';
+  if (btnStartZerotier) {
+    btnStartZerotier.style.display = (installed && !running) ? 'inline-block' : 'none';
+  }
+  btnJoinZerotier.style.display = (installed && running) ? 'inline-block' : 'none';
   
-  // Show networks section if connected
+  // Show networks section if running and has networks
   if (installed && running && networks.length > 0) {
     ztNetworks.style.display = 'block';
     renderZeroTierNetworks(networks);
@@ -1714,6 +1736,36 @@ function setupNetworkingListeners() {
         } else {
           alert('Failed to install ZeroTier: ' + result.error);
         }
+      }
+    });
+  }
+
+  if (btnStartZerotier) {
+    btnStartZerotier.addEventListener('click', async () => {
+      btnStartZerotier.disabled = true;
+      btnStartZerotier.textContent = 'Starting...';
+      try {
+        const result = await window.api.startZeroTier();
+        if (result.success) {
+          alert('ZeroTier service started!');
+        } else {
+          alert('Failed to start ZeroTier service: ' + (result.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Error starting ZeroTier: ' + e.message);
+      } finally {
+        btnStartZerotier.disabled = false;
+        btnStartZerotier.textContent = 'Start Service';
+        await refreshAllNetworkingStatus();
+      }
+    });
+  }
+
+  if (btnJoinZerotier) {
+    btnJoinZerotier.addEventListener('click', () => {
+      ztNetworks.style.display = ztNetworks.style.display === 'none' ? 'block' : 'none';
+      if (ztNetworks.style.display === 'block') {
+        ztNetworkId.focus();
       }
     });
   }
