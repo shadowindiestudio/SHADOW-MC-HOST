@@ -119,6 +119,7 @@ libraries/
 
 # Ignore any accidentally committed data
 ShadowMCHost/
+server/
 
 # ============================================================================
 # ENVIRONMENT FILES (CONTAIN SECRETS)
@@ -136,6 +137,8 @@ mc-bot/.env.*
 # Manager configuration
 manager/.env
 manager/.env.*
+manager/servers.json
+manager/networking-config.json
 
 # ============================================================================
 # BUILD OUTPUT
