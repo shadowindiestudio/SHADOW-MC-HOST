@@ -168,12 +168,16 @@ downloads/
 .bot.pid
 
 # ============================================================================
-# TEMPORARY FILES
+# TEMPORARY FILES AND SETUP LOCKS
 # ============================================================================
 *.tmp
 *.temp
 .tmp/
 .temp/
+.setup-complete
+manager/.setup-complete
+*.worktrees/
+.worktrees/
 
 # ============================================================================
 # BACKUPS
