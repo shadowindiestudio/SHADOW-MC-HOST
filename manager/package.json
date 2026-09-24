@@ -4,12 +4,43 @@
   "description": "Desktop manager for SHADOW MC HOST - Minecraft Server Manager with Discord Bot",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "dist": "electron-builder",
+    "package:win": "electron-packager . \"Shadow MC Host\" --platform=win32 --arch=x64 --out=dist --overwrite --asar=false"
+  },
+  "build": {
+    "appId": "com.shadowmc.host",
+    "productName": "Shadow MC Host",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "servers.json",
+      "tray-icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    }
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "electron": "^30.0.6",
     "pidusage": "^4.0.1",
     "rcon-client": "^4.2.5"
+  },
+  "devDependencies": {
+    "electron": "^30.0.6",
+    "electron-builder": "^24.6.0",
+    "electron-packager": "^17.1.0"
   }
 }
