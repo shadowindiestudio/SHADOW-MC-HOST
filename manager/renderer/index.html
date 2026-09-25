@@ -7,315 +7,429 @@
   <!-- Google Fonts: Inter and JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="mode-simple">
   <div class="app-container">
-    
+
     <!-- LEFT SIDEBAR -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h1 class="app-title">☠ SHADOW MC HOST</h1>
+        <div class="brand-row">
+          <div class="brand-logo">
+            <svg class="brand-icon" viewBox="0 0 24 24" width="22" height="22">
+              <path fill="currentColor" d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.8L19.2 8 12 11.2 4.8 8 12 4.8zM4 9.8l7 3.5v6.9l-7-3.5V9.8zm9 10.4v-6.9l7-3.5v6.9l-7 3.5z"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1 class="app-title">SHADOW MC</h1>
+            <span class="app-subtitle">HOST MANAGER</span>
+          </div>
+        </div>
       </div>
-      
+
+      <!-- Quick Server Indicator in Sidebar -->
+      <div class="sidebar-server-chip" id="sidebar-active-server-chip" title="Active Server Profile">
+        <span class="chip-label">ACTIVE SERVER</span>
+        <div class="chip-content">
+          <span class="server-dot-live offline" id="server-sidebar-live-dot"></span>
+          <span class="chip-name" id="sidebar-active-server-name">default</span>
+        </div>
+      </div>
+
       <nav class="nav-menu">
-        <button class="nav-btn active" data-panel="dashboard">
+        <button class="nav-btn active" data-panel="dashboard" title="Dashboard & Quick Controls">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-          Dashboard
+          <span>Dashboard</span>
         </button>
-        <button class="nav-btn" data-panel="console">
+        <button class="nav-btn" data-panel="console" title="Live Server & Bot Console">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 12H4v-2h8v2zm8-4H4V8h16v4z"/></svg>
-          Console
+          <span>Console</span>
         </button>
-        <button class="nav-btn" data-panel="players">
+        <button class="nav-btn" data-panel="players" title="Online Players & Permissions">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          Players
+          <span>Players</span>
         </button>
-        <button class="nav-btn" data-panel="servers"><svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 6H20V16H4zM22 2H2v20h20V2z"/></svg>Servers</button>
-        <button class="nav-btn" data-panel="settings">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-          Settings
+        <button class="nav-btn" data-panel="servers" title="Multi-Server Profiles">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 6H20V16H4zM22 2H2v20h20V2z"/></svg>
+          <span>Servers</span>
         </button>
-        <button class="nav-btn" data-panel="setup">
-          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 15.55C9.24 15.55 6.97 13.28 6.97 11C6.97 8.72 9.24 6.45 12 6.45C14.76 6.45 17.03 8.72 17.03 11C17.03 13.28 14.76 15.55 12 15.55M19.35 7.64C18.27 6.97 16.98 6.64 15.64 6.64C14.65 6.64 14.32 6.97 13.65 7.64C13.31 7.98 13.31 8.51 13.65 8.85L15.89 11.09C16.28 11.48 16.91 11.48 17.29 11.09L19.54 8.85C19.88 8.51 19.88 7.98 19.54 7.64M4.46 16.36C5.73 17.03 7.02 17.36 8.36 17.36C9.35 17.36 9.68 17.03 10.35 16.36C10.69 16.02 10.69 15.49 10.35 15.15L8.11 12.91C7.72 12.52 7.09 12.52 6.71 12.91L4.46 15.15C4.12 15.49 4.12 16.02 4.46 16.36M12 4C12.55 4 13 4.45 13 5C13 5.55 12.55 6 12 6C11.45 6 11 5.55 11 5C11 4.45 11.45 4 12 4Z"/></svg>
-          Setup
-        </button>
-        <button class="nav-btn" data-panel="networking">
+        <button class="nav-btn" data-panel="networking" title="Networking & Player Connections">
           <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-          Networking
+          <span>Networking</span>
+        </button>
+        <button class="nav-btn" data-panel="settings" title="Server & App Settings">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          <span>Settings</span>
+        </button>
+        <button class="nav-btn" data-panel="setup" title="Prerequisites & Auto-Setup">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 15.55C9.24 15.55 6.97 13.28 6.97 11C6.97 8.72 9.24 6.45 12 6.45C14.76 6.45 17.03 8.72 17.03 11C17.03 13.28 14.76 15.55 12 15.55M19.35 7.64C18.27 6.97 16.98 6.64 15.64 6.64C14.65 6.64 14.32 6.97 13.65 7.64C13.31 7.98 13.31 8.51 13.65 8.85L15.89 11.09C16.28 11.48 16.91 11.48 17.29 11.09L19.54 8.85C19.88 8.51 19.88 7.98 19.54 7.64M4.46 16.36C5.73 17.03 7.02 17.36 8.36 17.36C9.35 17.36 9.68 17.03 10.35 16.36C10.69 16.02 10.69 15.49 10.35 15.15L8.11 12.91C7.72 12.52 7.09 12.52 6.71 12.91L4.46 15.15C4.12 15.49 4.12 16.02 4.46 16.36M12 4C12.55 4 13 4.45 13 5C13 5.55 12.55 6 12 6C11.45 6 11 5.55 11 5C11 4.45 11.45 4 12 4Z"/></svg>
+          <span>Auto-Setup</span>
         </button>
       </nav>
-      
+
       <div class="sidebar-footer">
-        <div class="status-item">
+        <div class="status-item" title="Minecraft Server Daemon">
           <span class="status-dot offline" id="server-sidebar-dot"></span>
           <span class="status-label">Server</span>
         </div>
-        <div class="status-item">
+        <div class="status-item" title="Discord Bot Bridge">
           <span class="status-dot offline" id="bot-sidebar-dot"></span>
           <span class="status-label">Discord Bot</span>
         </div>
       </div>
     </aside>
-    
+
     <!-- RIGHT MAIN CONTENT -->
     <main class="main-content">
-      
+
+      <!-- TOP UTILITY & MODE BAR -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <div class="server-indicator-badge">
+            <span class="server-indicator-label">TARGET:</span>
+            <span class="server-indicator-name" id="topbar-server-name">default</span>
+          </div>
+          <div class="server-status-pill offline" id="topbar-status-pill">
+            <span class="status-dot offline" id="topbar-status-dot"></span>
+            <span class="status-text" id="topbar-status-text">Server Offline</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- SIMPLE VS ADVANCED MODE SWITCHER -->
+          <div class="mode-switch-group" title="Toggle between Simple and Advanced control panel modes">
+            <button class="mode-btn active" id="btn-mode-simple" type="button">Simple</button>
+            <button class="mode-btn" id="btn-mode-advanced" type="button">Advanced</button>
+          </div>
+
+          <div class="topbar-divider"></div>
+
+          <div class="live-clock-container" title="System Clock">
+            <svg class="clock-icon" viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7V7z"/></svg>
+            <span class="timestamp-live" id="dashboard-clock">--:--:--</span>
+          </div>
+        </div>
+      </header>
+
       <!-- DASHBOARD PANEL -->
       <section class="panel active" id="dashboard-panel">
         <div class="panel-header">
-          <h2>Dashboard</h2>
-          <span class="timestamp-live" id="dashboard-clock">2026-05-23 15:44</span>
+          <div class="panel-header-title">
+            <h2>Dashboard</h2>
+            <p class="panel-subtitle">Overview and live management for your active Minecraft server</p>
+          </div>
         </div>
-        
-        <!-- QUICK START SECTION -->
+
+        <!-- QUICK START SECTION (Simple Mode Hero) -->
         <div class="card quickstart-card" id="quickstart-panel">
-          <h3>🟢 One-Click Start</h3>
-          <p>Click the button below to automatically check everything and start your Minecraft server and Discord bot.</p>
-          <p><strong>This will:</strong></p>
-          <ul class="quickstart-list">
-            <li>Check for Node.js and Java 25+</li>
-            <li>Download PaperMC server if missing</li>
-            <li>Create all necessary configuration files</li>
-            <li>Install npm dependencies</li>
-            <li>Start the Minecraft server</li>
-            <li>Start the Discord bot (if configured)</li>
-          </ul>
+          <div class="quickstart-header">
+            <div class="quickstart-title-wrap">
+              <span class="quickstart-badge">EASY HOST</span>
+              <h3>One-Click Start Everything</h3>
+            </div>
+            <button class="btn btn-sm btn-subtle" id="btn-dismiss-quickstart" type="button" title="Minimize quick start guide">Details</button>
+          </div>
+          <p class="quickstart-desc">Automatically validates Node.js & Java 25+, configures PaperMC, prepares dependencies, and boots your server.</p>
+          <div class="quickstart-details" id="quickstart-details-box">
+            <ul class="quickstart-list">
+              <li><span>✓</span> Checks system prerequisites (Node.js, Java 25+)</li>
+              <li><span>✓</span> Verifies or installs PaperMC server jar</li>
+              <li><span>✓</span> Inits server properties & eula.txt</li>
+              <li><span>✓</span> Boots Minecraft server and starts Discord bot</li>
+            </ul>
+          </div>
           <div class="quickstart-actions">
             <button class="btn btn-primary btn-lg" id="btn-oneclick-start">
-              📩 One-Click Start Everything
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+              <span>One-Click Start Everything</span>
             </button>
           </div>
-          <p class="quickstart-note">⚠️ This may take a few minutes on first run. Check the Console for progress.</p>
+          <p class="quickstart-note">Notice: First run may take a few minutes while files are prepared. Live logs stream in the console below.</p>
         </div>
 
         <div class="dashboard-grid">
           <!-- SERVER CARD -->
           <div class="card process-card" id="server-card">
             <div class="card-header">
-              <h3>Minecraft Server</h3>
+              <div class="card-title-group">
+                <svg class="card-type-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2L2 7v10l10 5 10-5V7L12 2z"/></svg>
+                <h3>Minecraft Server</h3>
+              </div>
               <div class="status-badge offline" id="server-status-badge">Offline</div>
             </div>
-            
+
             <div class="card-body">
               <div class="metric-row">
-                <span class="metric-label">RAM Usage:</span>
+                <span class="metric-label">Memory Usage</span>
                 <span class="metric-value" id="server-ram-value">0 MB / 4096 MB</span>
               </div>
               <div class="progress-bar-container">
                 <div class="progress-bar" id="server-ram-bar" style="width: 0%"></div>
               </div>
-              
-              <div class="metric-row">
-                <span class="metric-label">Uptime:</span>
+
+              <div class="metric-row metric-uptime-row">
+                <span class="metric-label">Uptime</span>
                 <span class="metric-value uptime-num" id="server-uptime-val">00:00:00</span>
               </div>
             </div>
-            
+
             <div class="card-actions">
-              <button class="btn btn-primary" id="btn-start-server">Start</button>
-              <button class="btn btn-danger" id="btn-stop-server" disabled>Stop</button>
-              <button class="btn" id="btn-restart-server" disabled>Restart</button>
+              <button class="btn btn-primary" id="btn-start-server">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                <span>Start</span>
+              </button>
+              <button class="btn btn-danger" id="btn-stop-server" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>
+                <span>Stop</span>
+              </button>
+              <button class="btn btn-secondary" id="btn-restart-server" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                <span>Restart</span>
+              </button>
             </div>
           </div>
-          
+
           <!-- BOT CARD -->
           <div class="card process-card" id="bot-card">
             <div class="card-header">
-              <h3>Discord Bot</h3>
+              <div class="card-title-group">
+                <svg class="card-type-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                <h3>Discord Bot</h3>
+              </div>
               <div class="status-badge offline" id="bot-status-badge">Offline</div>
             </div>
-            
+
             <div class="card-body">
               <div class="metric-row">
-                <span class="metric-label">RAM Usage:</span>
+                <span class="metric-label">Memory Usage</span>
                 <span class="metric-value" id="bot-ram-value">0 MB</span>
               </div>
               <div class="metric-row space-top">
-                <span class="metric-label">Last Command:</span>
+                <span class="metric-label">Last Discord Cmd</span>
                 <span class="metric-value command-badge" id="bot-last-command">None</span>
               </div>
             </div>
-            
+
             <div class="card-actions">
-              <button class="btn btn-primary" id="btn-start-bot">Start</button>
-              <button class="btn btn-danger" id="btn-stop-bot" disabled>Stop</button>
+              <button class="btn btn-primary" id="btn-start-bot">
+                <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+                <span>Start</span>
+              </button>
+              <button class="btn btn-danger" id="btn-stop-bot" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>
+                <span>Stop</span>
+              </button>
             </div>
           </div>
         </div>
-        
+
         <!-- WIDGETS ROW -->
         <div class="widgets-row">
           <div class="card widget-card">
-            <h4>Online Players</h4>
+            <div class="widget-header">
+              <h4>Online Players</h4>
+              <span class="widget-sub-tag">Active Capacity</span>
+            </div>
             <div class="widget-large-val tabular-nums" id="widget-player-count">0/20</div>
             <div class="progress-bar-container">
               <div class="progress-bar" id="widget-player-bar" style="width: 0%"></div>
             </div>
           </div>
+
           <div class="card widget-card">
-            <h4>Ticks Per Second (TPS)</h4>
+            <div class="widget-header">
+              <h4>Tick Rate (TPS)</h4>
+              <span class="widget-sub-tag">Target: 20.00</span>
+            </div>
             <div class="widget-large-val tabular-nums" id="widget-tps-val">--.--</div>
             <span class="tps-sub" id="widget-tps-status">Server Offline</span>
           </div>
         </div>
-        
+
         <!-- MINI CONSOLE PREVIEW -->
         <div class="card mini-console-card">
           <div class="card-header">
-            <h4>Live Console Preview (Last 8 lines)</h4>
-            <button class="btn btn-sm" id="btn-go-to-console">View Full Console</button>
+            <div class="console-tab-tag">
+              <span class="terminal-dot"></span>
+              <h4>Live Console Preview (Recent Output)</h4>
+            </div>
+            <button class="btn btn-sm btn-secondary" id="btn-go-to-console">Full Console</button>
           </div>
           <div class="mini-console-body console-output-box" id="mini-console-output">
             <div class="console-line system-line">[System] Click 'One-Click Start' above or use the controls below.</div>
           </div>
         </div>
       </section>
-      
+
       <!-- SETUP PANEL -->
       <section class="panel" id="setup-panel">
         <div class="panel-header">
-          <h2>🔧 Auto-Setup</h2>
+          <div class="panel-header-title">
+            <h2>Auto-Setup & Diagnostics</h2>
+            <p class="panel-subtitle">Environment verification, PaperMC server installer, and automated configuration</p>
+          </div>
         </div>
-        
+
         <div class="setup-container">
-          <div class="setup-section">
-            <h3>Prerequisites Check</h3>
-            <p>Check if all required software is installed.</p>
-            <button class="btn btn-primary" id="btn-check-prereqs">Check Prerequisites</button>
+          <div class="card setup-section">
+            <div class="section-title-wrap">
+              <h3>Prerequisites Diagnostics</h3>
+              <p>Check if Node.js, Java 25+, server.jar, and npm packages are properly installed.</p>
+            </div>
+            <div class="setup-action-bar">
+              <button class="btn btn-primary" id="btn-check-prereqs">Run Check</button>
+            </div>
             <div class="progress-bar-container" style="margin-top: 15px;">
               <div class="progress-bar" id="setup-progress" style="width: 0%"></div>
             </div>
             <div class="setup-status" id="setup-status"></div>
-            
+
             <div class="prereqs-list" id="prereqs-list"></div>
           </div>
-          
-          <div class="setup-section">
-            <h3>Auto-Setup Server</h3>
-            <p>Automatically download PaperMC, create configuration files, and set up everything.</p>
-            <button class="btn btn-primary" id="btn-run-setup">Run Auto-Setup</button>
-            
+
+          <div class="card setup-section">
+            <div class="section-title-wrap">
+              <h3>Automated Server Setup</h3>
+              <p>Downloads the latest PaperMC jar, accepts EULA, sets default server properties, and prepares the runtime.</p>
+            </div>
+            <div class="setup-action-bar">
+              <button class="btn btn-primary" id="btn-run-setup">Execute Setup</button>
+            </div>
+
             <div class="setup-steps" id="setup-steps-list"></div>
           </div>
         </div>
       </section>
-      
+
       <!-- CONSOLE PANEL -->
       <section class="panel" id="console-panel">
         <div class="panel-header space-between">
-          <h2>Console</h2>
+          <div class="panel-header-title">
+            <h2>Integrated Console</h2>
+            <p class="panel-subtitle">Direct live terminal stream and interactive RCON command execution</p>
+          </div>
           <div class="console-header-actions">
             <div class="toggle-tabs">
-              <button class="tab-btn active" id="tab-server-console">Server Console</button>
-              <button class="tab-btn" id="tab-bot-console">Discord Bot Console</button>
+              <button class="tab-btn active" id="tab-server-console">Minecraft Server</button>
+              <button class="tab-btn" id="tab-bot-console">Discord Bot</button>
             </div>
-            <button class="btn btn-sm flat-btn" id="btn-copy-console">COPY</button>
+            <button class="btn btn-sm btn-secondary" id="btn-copy-console">Copy Buffer</button>
           </div>
         </div>
-        
+
         <div class="console-container">
           <div class="console-main-box console-output-box" id="full-console-output">
             <!-- Populated dynamically -->
           </div>
-          
+
           <div class="console-input-bar">
-            <input type="text" id="console-input-field" placeholder="Enter server command (e.g. op sarad, list) or prefix /say..." autocomplete="off">
-            <button class="btn" id="btn-send-console-cmd">Send</button>
+            <span class="console-prompt">&gt;</span>
+            <input type="text" id="console-input-field" placeholder="Enter server command (e.g. op username, list, weather clear, say hello)..." autocomplete="off">
+            <button class="btn btn-primary" id="btn-send-console-cmd">Send</button>
           </div>
         </div>
       </section>
-      
+
       <!-- PLAYERS PANEL -->
       <section class="panel" id="players-panel">
         <div class="panel-header space-between">
-          <h2>Players</h2>
+          <div class="panel-header-title">
+            <h2>Player Management</h2>
+            <p class="panel-subtitle">Monitor connected players, grant operator privileges, or kick unruly players</p>
+          </div>
           <span class="players-total-count" id="players-count-badge">0 Players Online</span>
         </div>
-        
+
         <!-- Players empty state -->
         <div class="empty-state" id="players-empty-state">
-          <div class="empty-icon">☠</div>
-          <h3>No players currently exploring the shadow realm</h3>
-          <p>Players will appear here once they connect to the server.</p>
+          <div class="empty-icon-wrap">
+            <svg viewBox="0 0 24 24" width="48" height="48"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          </div>
+          <h3>No Players Online</h3>
+          <p>When players connect to this server, they will appear here with kick and OP management controls.</p>
         </div>
-        
+
         <!-- Players grid -->
         <div class="players-grid" id="players-list-grid" style="display: none;">
-          <!-- Dynamically populated card structure:
-          <div class="player-card">
-            <div class="player-avatar">S</div>
-            <div class="player-info">
-              <span class="player-name">sarad</span>
-              <span class="badge badge-op">OP</span>
-            </div>
-            <div class="player-actions">
-              <button class="btn btn-sm btn-danger">Kick</button>
-              <button class="btn btn-sm">Deop</button>
-            </div>
-          </div>
-          -->
+          <!-- Dynamically populated card structure -->
         </div>
       </section>
-      
+
       <!-- SETTINGS PANEL -->
       <section class="panel" id="settings-panel">
         <div class="panel-header">
-          <h2>Settings</h2>
+          <div class="panel-header-title">
+            <h2>Configuration</h2>
+            <p class="panel-subtitle">Fine-tune gameplay parameters, memory allocation, Discord bot token, and window behavior</p>
+          </div>
         </div>
-        
+
         <form class="settings-form" id="settings-form-el">
           <div class="settings-grid">
-            <div class="settings-section">
+
+            <!-- SERVER CONFIG SECTION -->
+            <div class="card settings-section">
+              <div class="section-badge">GAMEPLAY</div>
               <h3>Server Configuration</h3>
               <div class="form-group">
                 <label for="set-max-players">Max Players</label>
                 <input type="number" id="set-max-players" min="1" max="999" placeholder="20">
+                <small class="form-note">Maximum concurrent player connections allowed.</small>
               </div>
               <div class="form-group">
                 <label for="set-view-dist">View Distance (chunks)</label>
                 <input type="number" id="set-view-dist" min="2" max="32" placeholder="10">
+                <small class="form-note">Chunk radius sent to client renderers (default: 10).</small>
               </div>
-              <div class="form-group">
+              <div class="form-group advanced-only">
                 <label for="set-sim-dist">Simulation Distance (chunks)</label>
                 <input type="number" id="set-sim-dist" min="2" max="32" placeholder="10">
+                <small class="form-note">Tick calculation radius around players.</small>
               </div>
               <div class="form-group">
                 <label for="set-motd">Message of the Day (MOTD)</label>
-                <textarea id="set-motd" rows="3" placeholder="Server description..."></textarea>
+                <textarea id="set-motd" rows="2" placeholder="A Minecraft Server hosted with Shadow MC"></textarea>
+                <small class="form-note">Server subtitle displayed in the Minecraft multiplayer list.</small>
               </div>
             </div>
-            
-            <div class="settings-section">
-              <h3>Credentials & Resources</h3>
+
+            <!-- CREDENTIALS & HARDWARE SECTION -->
+            <div class="card settings-section">
+              <div class="section-badge">RESOURCES</div>
+              <h3>Credentials & Allocation</h3>
               <div class="form-group">
-                <label for="set-rcon-pass">RCON Password</label>
-                <input type="text" id="set-rcon-pass" placeholder="Strong password...">
+                <label for="set-max-ram">Allocated Server RAM (Xmx)</label>
+                <input type="text" id="set-max-ram" placeholder="e.g. 4G or 4096M">
+                <small class="form-note">Specifies heap limit for PaperMC. Applied to start.bat script.</small>
+              </div>
+              <div class="form-group advanced-only">
+                <label for="set-rcon-pass">RCON Secret Password</label>
+                <input type="text" id="set-rcon-pass" placeholder="Strong administrative password...">
+                <small class="form-note">Used by Manager and Discord bot for command dispatch.</small>
               </div>
               <div class="form-group">
                 <label for="set-discord-token">Discord Bot Token</label>
                 <div class="password-input-container">
-                  <input type="password" id="set-discord-token" placeholder="Token string...">
-                  <button type="button" class="btn btn-sm" id="btn-toggle-token-mask">Show</button>
+                  <input type="password" id="set-discord-token" placeholder="Bot token string...">
+                  <button type="button" class="btn btn-sm btn-secondary" id="btn-toggle-token-mask">Show</button>
                 </div>
-              </div>
-              <div class="form-group">
-                <label for="set-max-ram">Allocated Server RAM (Xmx/Xms)</label>
-                <input type="text" id="set-max-ram" placeholder="e.g. 4G or 4096M">
-                <small class="form-note">Must be specified as e.g. 4G or 4096M. Updates start.bat directly.</small>
+                <small class="form-note">Token from Discord Developer Portal for the bot daemon.</small>
               </div>
             </div>
           </div>
-          
-          <div class="settings-section settings-section-full">
-            <h3>App Behaviour</h3>
+
+          <!-- APPLICATION BEHAVIOUR SECTION -->
+          <div class="card settings-section settings-section-full">
+            <div class="section-badge">APPLICATION</div>
+            <h3>App Runtime Behavior</h3>
             <div class="toggle-list">
 
-              <div class="toggle-row">
+              <div class="toggle-row advanced-only">
                 <div class="toggle-row-label">
-                  <span class="toggle-title">Show Terminal Windows</span>
-                  <span class="toggle-desc">When ON, server/bot launch with a visible CMD window. Applies on next start.</span>
+                  <span class="toggle-title">Show External Terminal Windows</span>
+                  <span class="toggle-desc">Launches separate Windows Command Prompt windows for the Paper server and Discord bot.</span>
                 </div>
                 <label class="toggle-switch" for="set-show-terminal">
                   <input type="checkbox" id="set-show-terminal">
@@ -325,8 +439,8 @@
 
               <div class="toggle-row">
                 <div class="toggle-row-label">
-                  <span class="toggle-title">Minimize to System Tray on Close</span>
-                  <span class="toggle-desc">Clicking X hides the window to the tray instead of quitting. Right-click tray icon to quit.</span>
+                  <span class="toggle-title">Minimize to Windows System Tray on Close</span>
+                  <span class="toggle-desc">Closing the manager window keeps servers alive in the system tray instead of stopping them.</span>
                 </div>
                 <label class="toggle-switch" for="set-close-to-tray">
                   <input type="checkbox" id="set-close-to-tray">
@@ -336,8 +450,8 @@
 
               <div class="toggle-row">
                 <div class="toggle-row-label">
-                  <span class="toggle-title">Auto-Start Server on Launch</span>
-                  <span class="toggle-desc">Automatically starts the Minecraft server when the manager opens.</span>
+                  <span class="toggle-title">Auto-Start Server on Manager Launch</span>
+                  <span class="toggle-desc">Immediately boots the active Minecraft server profile when Shadow MC Host starts.</span>
                 </div>
                 <label class="toggle-switch" for="set-auto-start-server">
                   <input type="checkbox" id="set-auto-start-server">
@@ -347,8 +461,8 @@
 
               <div class="toggle-row">
                 <div class="toggle-row-label">
-                  <span class="toggle-title">Auto-Start Bot on Launch</span>
-                  <span class="toggle-desc">Automatically starts the Discord bot when the manager opens.</span>
+                  <span class="toggle-title">Auto-Start Discord Bot on Manager Launch</span>
+                  <span class="toggle-desc">Automatically connects the Discord bot bridge when the manager opens.</span>
                 </div>
                 <label class="toggle-switch" for="set-auto-start-bot">
                   <input type="checkbox" id="set-auto-start-bot">
@@ -364,388 +478,403 @@
             <span class="save-status-msg" id="settings-status-message"></span>
           </div>
         </form>
-        
+
         <!-- DANGER ZONE -->
-        <div class="danger-zone">
-          <h3>Danger Zone</h3>
-          <p>High-priority commands and operations that could disrupt active sessions.</p>
+        <div class="card danger-zone">
+          <div class="danger-header">
+            <div class="danger-title-wrap">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+              <h3>Danger Zone</h3>
+            </div>
+            <p>Direct filesystem access and administrative server resets.</p>
+          </div>
           <div class="danger-actions-row">
-            <button class="btn btn-danger" id="btn-danger-reset-whitelist">Reset Whitelist</button>
-            <button class="btn" id="btn-danger-open-folder">Open Server Folder</button>
-            <button class="btn" id="btn-danger-open-logs">Open logs/latest.log</button>
+            <button class="btn btn-danger" id="btn-danger-reset-whitelist" type="button">Reset Whitelist</button>
+            <button class="btn btn-secondary" id="btn-danger-open-folder" type="button">Open Server Folder</button>
+            <button class="btn btn-secondary" id="btn-danger-open-logs" type="button">Open logs/latest.log</button>
           </div>
         </div>
       </section>
-      
-    
+
       <!-- SERVER PROFILES PANEL -->
       <section class="panel" id="servers-panel">
-        <div class="panel-header">
-          <h2>Server Profiles</h2>
-          <button class="btn btn-primary btn-sm" id="btn-add-server">+ Add Server</button>
+        <div class="panel-header space-between">
+          <div class="panel-header-title">
+            <h2>Server Profiles</h2>
+            <p class="panel-subtitle">Manage multiple instances, isolated worlds, and switch the active server target</p>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-add-server">+ New Server</button>
         </div>
-        
+
         <div class="server-profiles-grid" id="server-profiles-grid">
           <!-- Server profile cards will be inserted here dynamically -->
           <div class="empty-state" id="servers-empty-state">
-            <div class="empty-icon">🖥️</div>
-            <h3>No server profiles configured</h3>
-            <p>Click "Add Server" to create your first server profile.</p>
+            <div class="empty-icon-wrap">
+              <svg viewBox="0 0 24 24" width="48" height="48"><path fill="currentColor" d="M4 6H20V16H4zM22 2H2v20h20V2z"/></svg>
+            </div>
+            <h3>No Server Profiles Configured</h3>
+            <p>Click "New Server" to create your first isolated Minecraft server profile.</p>
           </div>
         </div>
-        
+
         <!-- Add Server Modal -->
         <div class="modal-overlay" id="add-server-modal">
           <div class="modal">
             <div class="modal-header">
-              <h3>Add New Server Profile</h3>
-              <button class="modal-close" id="btn-close-add-server">&times;</button>
+              <h3>Create Server Profile</h3>
+              <button class="modal-close" id="btn-close-add-server" type="button">&times;</button>
             </div>
             <div class="modal-body">
               <form id="add-server-form">
                 <div class="form-group">
-                  <label for="new-server-id">Profile ID (unique)</label>
-                  <input type="text" id="new-server-id" placeholder="e.g., creative, survival" required>
+                  <label for="new-server-id">Profile Identifier (slug)</label>
+                  <input type="text" id="new-server-id" placeholder="e.g. survival, creative" required>
+                  <small class="form-note">Unique alphanumeric ID without spaces.</small>
                 </div>
                 <div class="form-group">
                   <label for="new-server-name">Display Name</label>
-                  <input type="text" id="new-server-name" placeholder="e.g., Creative World" required>
+                  <input type="text" id="new-server-name" placeholder="e.g. Survival SMP Season 2" required>
                 </div>
                 <div class="form-group">
-                  <label for="new-server-path">Server Directory Path</label>
-                  <input type="text" id="new-server-path" placeholder="e.g., ../server" value="../server" required>
-                  <small class="form-note">Path relative to manager/ directory</small>
+                  <label for="new-server-path">Server Directory Relative Path</label>
+                  <input type="text" id="new-server-path" placeholder="e.g. ../server" value="../server" required>
+                  <small class="form-note">Path relative to manager directory.</small>
+                </div>
+                <div class="form-group advanced-only">
+                  <label for="new-server-botdir">Discord Bot Directory Path</label>
+                  <input type="text" id="new-server-botdir" placeholder="e.g. ../mc-bot" value="../mc-bot" required>
                 </div>
                 <div class="form-group">
-                  <label for="new-server-botdir">Bot Directory Path</label>
-                  <input type="text" id="new-server-botdir" placeholder="e.g., ../mc-bot" value="../mc-bot" required>
+                  <label for="new-server-maxram">Memory Allocation (Max RAM)</label>
+                  <input type="text" id="new-server-maxram" placeholder="e.g. 4G or 4096M" value="4G" required>
                 </div>
                 <div class="form-group">
-                  <label for="new-server-maxram">Max RAM</label>
-                  <input type="text" id="new-server-maxram" placeholder="e.g., 4G or 4096M" value="4G" required>
-                </div>
-                <div class="form-group">
-                  <label for="new-server-notes">Notes</label>
-                  <textarea id="new-server-notes" placeholder="Optional description..." rows="2"></textarea>
+                  <label for="new-server-notes">Notes / Description</label>
+                  <textarea id="new-server-notes" placeholder="Optional notes for this server instance..." rows="2"></textarea>
                 </div>
               </form>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" id="btn-cancel-add-server">Cancel</button>
-              <button type="button" class="btn btn-primary" id="btn-confirm-add-server">Add Server</button>
+              <button type="button" class="btn btn-primary" id="btn-confirm-add-server">Create Profile</button>
             </div>
           </div>
         </div>
       </section>
-      
+
       <!-- NETWORKING PANEL -->
       <section class="panel" id="networking-panel">
         <div class="panel-header">
-          <h2>&#127760; Networking</h2>
+          <div class="panel-header-title">
+            <h2>Networking & Connectivity</h2>
+            <p class="panel-subtitle">Configure how external and local players join your servers with zero port complications</p>
+          </div>
         </div>
-        
+
         <div class="networking-container">
           <!-- Connection Methods Selection -->
           <div class="card networking-methods-card">
-            <h3>Connection Methods</h3>
-            <p class="networking-intro">Choose how players connect to your servers. <strong>ZeroTier is recommended</strong> for easy, secure multiplayer.</p>
-            
+            <div class="methods-card-header">
+              <h3>Connection Adapters</h3>
+              <p class="networking-intro">ZeroTier and Tailscale provide encrypted peer-to-peer tunnels without router port forwarding.</p>
+            </div>
+
             <div class="method-tabs">
-              <button class="method-tab active" data-method="zerotier">
-                <span class="method-icon">&#11088;</span>
+              <button class="method-tab active" data-method="zerotier" type="button">
+                <span class="method-icon">⭐</span>
                 <span class="method-name">ZeroTier</span>
                 <span class="method-status" id="zt-status-badge">Detecting...</span>
               </button>
-              <button class="method-tab" data-method="tailscale">
-                <span class="method-icon">&#128279;</span>
+              <button class="method-tab" data-method="tailscale" type="button">
+                <span class="method-icon">🔗</span>
                 <span class="method-name">Tailscale</span>
                 <span class="method-status" id="ts-status-badge">Detecting...</span>
               </button>
-              <button class="method-tab" data-method="lan">
-                <span class="method-icon">&#127968;</span>
+              <button class="method-tab" data-method="lan" type="button">
+                <span class="method-icon">🏠</span>
                 <span class="method-name">LAN</span>
                 <span class="method-status" id="lan-status-badge">Detecting...</span>
               </button>
-              <button class="method-tab" data-method="portForwarding">
-                <span class="method-icon">&#128268;</span>
+              <button class="method-tab" data-method="portForwarding" type="button">
+                <span class="method-icon">🔌</span>
                 <span class="method-name">Port Forwarding</span>
                 <span class="method-status" id="pf-status-badge">Configure</span>
               </button>
-              <button class="method-tab" data-method="playitgg">
-                <span class="method-icon">&#127918;</span>
+              <button class="method-tab" data-method="playitgg" type="button">
+                <span class="method-icon">🎮</span>
                 <span class="method-name">Playit.gg</span>
                 <span class="method-status" id="pg-status-badge">Detecting...</span>
               </button>
-              <button class="method-tab" data-method="manual">
-                <span class="method-icon">&#9999;</span>
+              <button class="method-tab" data-method="manual" type="button">
+                <span class="method-icon">✏️</span>
                 <span class="method-name">Manual</span>
                 <span class="method-status" id="manual-status-badge">Configure</span>
               </button>
             </div>
           </div>
-          
+
           <!-- ZeroTier Panel -->
           <div class="networking-method-panel active" id="zerotier-panel">
             <div class="card">
-              <h4>&#11088; ZeroTier - Recommended</h4>
-              <p>ZeroTier creates a virtual private network. Players connect using ZeroTier addresses like <code>10.x.x.x:25565</code>.</p>
-              
+              <div class="adapter-header">
+                <div class="adapter-title-group">
+                  <span class="adapter-badge recommended">RECOMMENDED</span>
+                  <h4>ZeroTier Private Mesh</h4>
+                </div>
+                <p>Creates a zero-config virtual LAN. Friends join your network and connect using your ZeroTier IP.</p>
+              </div>
+
               <div class="method-status-section">
                 <div class="status-row">
-                  <span>Status:</span>
+                  <span class="row-label">Daemon Status:</span>
                   <span class="status-badge" id="zt-status">Detecting...</span>
                 </div>
                 <div class="status-row">
-                  <span>ZeroTier Address:</span>
-                  <span class="address-display" id="zt-address">-</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-zt" style="display: none;">Copy</button>
-                </div>
-              </div>
-              
-              <div class="method-actions" id="zt-actions">
-                <button class="btn btn-primary" id="btn-install-zerotier" style="display: none;">Install ZeroTier</button>
-                <button class="btn btn-primary" id="btn-start-zerotier" style="display: none;">Start Service</button>
-                <button class="btn btn-primary" id="btn-join-zerotier" style="display: none;">Join Network</button>
-                <button class="btn" id="btn-refresh-zerotier">Refresh Status</button>
-              </div>
-              
-              <div class="method-networks" id="zt-networks" style="display: none;">
-                <h5>Your ZeroTier Networks:</h5>
-                <div id="zt-networks-list"></div>
-                <div class="form-group">
-                  <label for="zt-network-id">Join Network by ID:</label>
-                  <div class="input-with-btn">
-                    <input type="text" id="zt-network-id" placeholder="Network ID (e.g., 1234abcd56)">
-                    <button class="btn btn-primary" id="btn-join-zt-network">Join</button>
+                  <span class="row-label">ZeroTier Address:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="zt-address">-</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-zt" style="display: none;" type="button">Copy</button>
                   </div>
                 </div>
               </div>
-              
+
+              <div class="method-actions" id="zt-actions">
+                <button class="btn btn-primary" id="btn-install-zerotier" style="display: none;" type="button">Install ZeroTier</button>
+                <button class="btn btn-primary" id="btn-start-zerotier" style="display: none;" type="button">Start Service</button>
+                <button class="btn btn-primary" id="btn-join-zerotier" style="display: none;" type="button">Join Network</button>
+                <button class="btn btn-secondary" id="btn-refresh-zerotier" type="button">Refresh Status</button>
+              </div>
+
+              <div class="method-networks" id="zt-networks" style="display: none;">
+                <h5>Joined ZeroTier Networks:</h5>
+                <div id="zt-networks-list"></div>
+                <div class="form-group" style="margin-top: 12px;">
+                  <label for="zt-network-id">Join Network by ID:</label>
+                  <div class="input-with-btn">
+                    <input type="text" id="zt-network-id" placeholder="16-character Network ID (e.g. 1234abcd5678ef90)">
+                    <button class="btn btn-primary" id="btn-join-zt-network" type="button">Join</button>
+                  </div>
+                </div>
+              </div>
+
               <div class="method-info" id="zt-info">
-                <p><strong>Setup Guide:</strong></p>
+                <h6>Quick Setup Steps:</h6>
                 <ol>
-                  <li>Install ZeroTier on all devices (server + player computers)</li>
-                  <li>Create a network at <a href="https://my.zerotier.com" target="_blank">my.zerotier.com</a></li>
-                  <li>Join the same network on all devices</li>
-                  <li>Authorize all devices in the network</li>
-                  <li>Players connect using the ZeroTier IP shown above</li>
+                  <li>Create a free account and network at <a href="https://my.zerotier.com" target="_blank">my.zerotier.com</a></li>
+                  <li>Paste the 16-character Network ID above and click Join</li>
+                  <li>In your ZeroTier dashboard, check the "Auth" box next to this host</li>
+                  <li>Give your friends the ZeroTier IP address displayed above</li>
                 </ol>
               </div>
             </div>
           </div>
-          
+
           <!-- Tailscale Panel -->
           <div class="networking-method-panel" id="tailscale-panel">
             <div class="card">
-              <h4>&#128279; Tailscale</h4>
-              <p>Tailscale creates a secure mesh network. Players connect using Tailscale addresses like <code>100.x.x.x:25565</code>.</p>
-              
+              <div class="adapter-header">
+                <h4>Tailscale WireGuard Mesh</h4>
+                <p>Tailscale connects devices using secure WireGuard tunnels without modifying router firewall rules.</p>
+              </div>
+
               <div class="method-status-section">
                 <div class="status-row">
-                  <span>Status:</span>
+                  <span class="row-label">Tailscale Status:</span>
                   <span class="status-badge" id="ts-status">Detecting...</span>
                 </div>
                 <div class="status-row">
-                  <span>Tailscale Address:</span>
-                  <span class="address-display" id="ts-address">-</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-ts" style="display: none;">Copy</button>
+                  <span class="row-label">Tailscale Address:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="ts-address">-</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-ts" style="display: none;" type="button">Copy</button>
+                  </div>
                 </div>
               </div>
-              
+
               <div class="method-actions" id="ts-actions">
-                <button class="btn btn-primary" id="btn-install-tailscale" style="display: none;">Install Tailscale</button>
-                <button class="btn btn-primary" id="btn-start-tailscale" style="display: none;">Start Tailscale</button>
-                <button class="btn btn-danger" id="btn-stop-tailscale" style="display: none;">Stop Tailscale</button>
-                <button class="btn" id="btn-refresh-tailscale">Refresh Status</button>
+                <button class="btn btn-primary" id="btn-install-tailscale" style="display: none;" type="button">Install Tailscale</button>
+                <button class="btn btn-primary" id="btn-start-tailscale" style="display: none;" type="button">Start Tailscale</button>
+                <button class="btn btn-danger" id="btn-stop-tailscale" style="display: none;" type="button">Stop Tailscale</button>
+                <button class="btn btn-secondary" id="btn-refresh-tailscale" type="button">Refresh Status</button>
               </div>
-              
+
               <div class="method-info">
-                <p><strong>Setup Guide:</strong></p>
+                <h6>Quick Setup Guide:</h6>
                 <ol>
-                  <li>Install Tailscale on all devices</li>
-                  <li>Login via the system tray icon</li>
-                  <li>Players connect using the Tailscale IP shown above</li>
+                  <li>Install Tailscale on the host machine and your friends' PCs</li>
+                  <li>Sign in to the same Tailscale account or invite friends to your tailnet</li>
+                  <li>Players connect directly to your <code>100.x.y.z:25565</code> address</li>
                 </ol>
-                <p><em>Note: Tailscale addresses work even behind NAT without port forwarding.</em></p>
               </div>
             </div>
           </div>
-          
+
           <!-- LAN Panel -->
           <div class="networking-method-panel" id="lan-panel">
             <div class="card">
-              <h4>&#127968; LAN / Local Network</h4>
-              <p>Players on the same local network can connect directly using your local IP addresses.</p>
-              
+              <div class="adapter-header">
+                <h4>Local Area Network (LAN)</h4>
+                <p>For players in the same household or local Wi-Fi router network.</p>
+              </div>
+
               <div class="method-status-section">
-                <h5>Your Local IP Addresses:</h5>
+                <h5>Local Network Interfaces:</h5>
                 <div id="lan-addresses-list"></div>
               </div>
-              
+
               <div class="method-info">
-                <p><strong>How to use:</strong></p>
-                <ol>
-                  <li>Make sure your server and player computers are on the same network</li>
-                  <li>Players connect using one of the IP addresses above with the server port</li>
-                  <li>Example: <code>192.168.1.100:25565</code></li>
-                </ol>
-                <p><em>Note: This only works on the same local network. For remote players, use ZeroTier or Tailscale.</em></p>
+                <h6>Local Connection Tip:</h6>
+                <p>Local players can add your LAN IP (e.g. <code>192.168.1.50:25565</code>) to their Minecraft Multiplayer list.</p>
               </div>
             </div>
           </div>
-          
+
           <!-- Port Forwarding Panel -->
           <div class="networking-method-panel" id="portforwarding-panel">
             <div class="card">
-              <h4>&#128268; Port Forwarding</h4>
-              <p>Allow external players to connect by forwarding a port on your router.</p>
-              
+              <div class="adapter-header">
+                <h4>Router Port Forwarding</h4>
+                <p>Direct public IP connection via router NAT forwarding rule.</p>
+              </div>
+
               <div class="method-status-section">
                 <div class="form-grid-2">
                   <div class="form-group">
-                    <label for="pf-external-port">External Port</label>
+                    <label for="pf-external-port">Public External Port</label>
                     <input type="number" id="pf-external-port" value="25565" min="1" max="65535">
                   </div>
                   <div class="form-group">
-                    <label for="pf-internal-port">Internal Port</label>
+                    <label for="pf-internal-port">Local Internal Port</label>
                     <input type="number" id="pf-internal-port" value="25565" min="1" max="65535">
                   </div>
                 </div>
-                
+
                 <div class="status-row">
-                  <span>Your Public IP:</span>
-                  <span class="address-display" id="pf-public-ip">Detecting...</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-pf-ip" style="display: none;">Copy</button>
+                  <span class="row-label">Public IP:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="pf-public-ip">Detecting...</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-pf-ip" style="display: none;" type="button">Copy</button>
+                  </div>
                 </div>
-                
+
                 <div class="status-row">
-                  <span>Connection Address:</span>
-                  <span class="address-display" id="pf-address">-</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-pf" style="display: none;">Copy</button>
+                  <span class="row-label">Full Host Address:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="pf-address">-</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-pf" style="display: none;" type="button">Copy</button>
+                  </div>
                 </div>
-                
+
                 <div class="status-row">
-                  <span>Local Port Status:</span>
+                  <span class="row-label">Local Listener:</span>
                   <span class="status-badge" id="pf-local-status">Checking...</span>
                 </div>
               </div>
-              
+
               <div class="method-actions">
-                <button class="btn" id="btn-refresh-pf">Refresh</button>
+                <button class="btn btn-secondary" id="btn-refresh-pf" type="button">Refresh Port Status</button>
               </div>
-              
+
               <div class="method-info">
-                <p><strong>Router Configuration:</strong></p>
-                <ol>
-                  <li>Find your router's admin page (usually <code>192.168.1.1</code>)</li>
-                  <li>Go to Port Forwarding / NAT settings</li>
-                  <li>Forward external port <span id="pf-external-display">25565</span> (TCP) to internal IP <span id="pf-local-ip">-</span> port <span id="pf-internal-display">25565</span></li>
-                  <li>Save and apply the changes</li>
-                </ol>
-                <p><em>Note: Each player needs a unique external port. You may need to configure firewall rules too.</em></p>
+                <h6>Router Rule Configuration:</h6>
+                <p>In router admin settings, create a port forwarding rule mapping TCP port <span id="pf-external-display">25565</span> to local IP <span id="pf-local-ip">-</span> on port <span id="pf-internal-display">25565</span>.</p>
               </div>
             </div>
           </div>
-          
+
           <!-- Playit.gg Panel -->
           <div class="networking-method-panel" id="playitgg-panel">
             <div class="card">
-              <h4>&#127918; Playit.gg</h4>
-              <p>Playit.gg creates secure tunnels for your Minecraft server. Players connect through their service.</p>
-              
+              <div class="adapter-header">
+                <h4>Playit.gg Tunneling</h4>
+                <p>Reverse proxy tunnel assigning a public subdomain without router access.</p>
+              </div>
+
               <div class="method-status-section">
                 <div class="status-row">
-                  <span>Status:</span>
+                  <span class="row-label">Tunnel Status:</span>
                   <span class="status-badge" id="pg-status">Detecting...</span>
                 </div>
                 <div class="status-row">
-                  <span>Playit.gg Address:</span>
-                  <span class="address-display" id="pg-address">-</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-pg" style="display: none;">Copy</button>
+                  <span class="row-label">Playit Address:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="pg-address">-</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-pg" style="display: none;" type="button">Copy</button>
+                  </div>
                 </div>
               </div>
-              
+
               <div class="method-actions" id="pg-actions">
-                <button class="btn btn-primary" id="btn-install-playit" style="display: none;">Install Playit.gg</button>
-                <button class="btn btn-primary" id="btn-start-playit" style="display: none;">Start Playit.gg</button>
-                <button class="btn" id="btn-refresh-playit">Refresh Status</button>
+                <button class="btn btn-primary" id="btn-install-playit" style="display: none;" type="button">Install Playit.gg</button>
+                <button class="btn btn-primary" id="btn-start-playit" style="display: none;" type="button">Start Tunnel</button>
+                <button class="btn btn-secondary" id="btn-refresh-playit" type="button">Refresh Status</button>
               </div>
-              
+
               <div class="method-info">
-                <p><strong>Setup Guide:</strong></p>
-                <ol>
-                  <li>Download and install Playit.gg from <a href="https://playit.gg" target="_blank">playit.gg</a></li>
-                  <li>Create an account and configure your server</li>
-                  <li>Start the Playit.gg service</li>
-                  <li>Players connect using the address shown above</li>
-                </ol>
-                <p><em>Note: Playit.gg provides additional features like web interfaces and automatic restarts.</em></p>
+                <h6>Setup Guide:</h6>
+                <p>Install and start Playit.gg to claim your persistent tunnel address at <a href="https://playit.gg" target="_blank">playit.gg</a>.</p>
               </div>
             </div>
           </div>
-          
+
           <!-- Manual Panel -->
           <div class="networking-method-panel" id="manual-panel">
             <div class="card">
-              <h4>&#9999; Manual / Custom Connection</h4>
-              <p>Enter a custom connection address for your server.</p>
-              
+              <div class="adapter-header">
+                <h4>Manual Custom Domain / IP</h4>
+                <p>Specify custom DNS records, SRV domains, or cloud proxy addresses.</p>
+              </div>
+
               <div class="method-status-section">
                 <div class="form-group">
-                  <label for="manual-address">Connection Address</label>
+                  <label for="manual-address">Hostname or IP Address with Port</label>
                   <div class="input-with-btn">
-                    <input type="text" id="manual-address" placeholder="e.g., mc.example.com:25565 or 123.45.67.89:25565">
-                    <button class="btn btn-primary" id="btn-save-manual">Save</button>
+                    <input type="text" id="manual-address" placeholder="e.g. mc.myserver.net:25565 or 123.45.67.89:25565">
+                    <button class="btn btn-primary" id="btn-save-manual" type="button">Save Address</button>
                   </div>
-                  <small class="form-note">Include the port number (e.g., :25565)</small>
                 </div>
-                
+
                 <div class="form-group">
-                  <label for="manual-notes">Notes</label>
-                  <textarea id="manual-notes" rows="2" placeholder="Optional description..."></textarea>
+                  <label for="manual-notes">Description / Connection Notes</label>
+                  <textarea id="manual-notes" rows="2" placeholder="e.g. Cloudflare tunnel or AWS elastic IP..."></textarea>
                 </div>
-                
+
                 <div class="status-row" style="margin-top: 15px;">
-                  <span>Saved Address:</span>
-                  <span class="address-display" id="manual-saved-address">-</span>
-                  <button class="btn btn-sm flat-btn" id="btn-copy-manual" style="display: none;">Copy</button>
+                  <span class="row-label">Configured Address:</span>
+                  <div class="address-copy-wrap">
+                    <span class="address-display" id="manual-saved-address">-</span>
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-manual" style="display: none;" type="button">Copy</button>
+                  </div>
                 </div>
-              </div>
-              
-              <div class="method-info">
-                <p><strong>Usage:</strong></p>
-                <ul>
-                  <li>Enter any valid connection address (domain or IP with port)</li>
-                  <li>Players use this exact address to connect</li>
-                  <li>Useful for custom domains, cloud hosting, or special configurations</li>
-                </ul>
               </div>
             </div>
           </div>
-          
-          <!-- Server Connection Addresses -->
+
+          <!-- Server Connection Addresses Card -->
           <div class="card" id="server-connections-card">
-            <h4>&#127918; Server Connection Addresses</h4>
-            <p>Connection addresses for each of your servers using the selected networking method.</p>
-            
-            <div class="method-selector">
-              <label for="server-method-select">Networking Method:</label>
-              <select id="server-method-select">
-                <option value="zerotier">ZeroTier</option>
-                <option value="tailscale">Tailscale</option>
-                <option value="lan">LAN</option>
-                <option value="portForwarding">Port Forwarding</option>
-                <option value="playitgg">Playit.gg</option>
-                <option value="manual">Manual</option>
-              </select>
+            <div class="card-header">
+              <div class="card-title-group">
+                <h4>Per-Server Connection Summary</h4>
+              </div>
+              <div class="method-selector">
+                <label for="server-method-select">Network Method:</label>
+                <select id="server-method-select">
+                  <option value="zerotier">ZeroTier</option>
+                  <option value="tailscale">Tailscale</option>
+                  <option value="lan">LAN</option>
+                  <option value="portForwarding">Port Forwarding</option>
+                  <option value="playitgg">Playit.gg</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
             </div>
-            
+
             <div class="server-connections-grid" id="server-connections-grid">
-              <!-- Server connection cards will be inserted here -->
+              <!-- Server connection cards inserted dynamically -->
               <div class="empty-state" id="connections-empty-state">
-                <div class="empty-icon">&#127918;</div>
+                <div class="empty-icon-wrap">🎮</div>
                 <h3>No server profiles configured</h3>
-                <p>Add server profiles in the Servers panel to see connection addresses.</p>
+                <p>Create server profiles in the Servers panel to generate connection links.</p>
               </div>
             </div>
           </div>
@@ -754,7 +883,7 @@
 
     </main>
   </div>
-  
+
   <script src="app.js"></script>
 </body>
 </html>

@@ -274,6 +274,20 @@ function applyServerStatus(state, extras = {}) {
   serverStatusBadge.className = badgeClass;
   serverStatusBadge.textContent = badgeText;
 
+  // Sync topbar & sidebar chip status
+  if (typeof topbarStatusPill !== 'undefined' && topbarStatusPill) {
+    topbarStatusPill.className = 'server-status-pill ' + (isOnline ? 'online' : (isStarting || isStopping ? 'warning' : 'offline'));
+  }
+  if (typeof topbarStatusDot !== 'undefined' && topbarStatusDot) {
+    topbarStatusDot.className = 'status-dot ' + (isOnline ? 'online' : (isStarting || isStopping ? 'warning' : 'offline'));
+  }
+  if (typeof topbarStatusText !== 'undefined' && topbarStatusText) {
+    topbarStatusText.textContent = isOnline ? 'Server Online' : (isStarting ? 'Starting...' : (isStopping ? 'Stopping...' : 'Server Offline'));
+  }
+  if (typeof serverSidebarLiveDot !== 'undefined' && serverSidebarLiveDot) {
+    serverSidebarLiveDot.className = 'server-dot-live ' + (isOnline ? 'online' : (isStarting || isStopping ? 'warning' : 'offline'));
+  }
+
   // Buttons
   btnStartServer.disabled   = isBusy;
   btnStopServer.disabled    = !isOnline;
@@ -594,7 +608,7 @@ async function sendConsoleCommand() {
   }
 
   appendSystemLine(fullConsoleOutput, `> ${val}`);
-  
+
   // Update UI and sync with main
   const displayCmd = val.startsWith('/') ? val : `/${val}`;
   if (botLastCmdEl) botLastCmdEl.textContent = displayCmd;
@@ -882,7 +896,7 @@ function escapeHtml(text) {
 
 async function setActiveServer(serverId) {
   if (serverId === activeServerId) return;
-  
+
   try {
     const result = await window.api.setActiveServer(serverId);
     if (result.success) {
@@ -898,7 +912,7 @@ async function setActiveServer(serverId) {
 
 async function removeServerProfile(serverId) {
   if (!confirm('Are you sure you want to remove server profile: ' + serverId + '?')) return;
-  
+
   try {
     const result = await window.api.removeServerProfile(serverId);
     if (result.success) {
@@ -1014,7 +1028,7 @@ function renderPrerequisites() {
   checks.forEach(check => {
     const item = document.createElement('div');
     item.className = 'prereq-item';
-    
+
     const status = prerequisitesStatus[check.key];
     const statusIcon = status ? '\u2705' : '\u274c';
     const statusText = status ? 'Installed' : 'Not found';
@@ -1056,7 +1070,7 @@ async function runAutoSetup() {
   try {
     const result = await window.api.runAutoSetup();
     setupSteps = result.steps || [];
-    
+
     // Render steps
     result.steps.forEach((step, index) => {
       const item = document.createElement('div');
@@ -1065,7 +1079,7 @@ async function runAutoSetup() {
       const isSuccess = step.includes('created') || step.includes('downloaded') || step.includes('installed');
       const icon = isError ? '\u274c' : isSuccess ? '\u2705' : '\u2192';
       const className = isError ? 'step-error' : isSuccess ? 'step-success' : 'step-info';
-      
+
       item.innerHTML = `<span class="step-icon">${icon}</span><span class="step-text">${step}</span>`;
       item.className = `setup-step ${className}`;
       setupStepsList.appendChild(item);
@@ -1078,7 +1092,7 @@ async function runAutoSetup() {
     if (progress >= 100 || result.steps.every(s => !s.startsWith('ERROR:'))) {
       setupStatus.textContent = 'Auto-setup complete! You can now start the server.';
       setupStatus.className = 'setup-status success';
-      
+
       // Check prerequisites again
       setTimeout(() => {
         prerequisitesChecked = false;
@@ -1118,7 +1132,7 @@ async function oneClickStart() {
     // First check prerequisites
     appendSystemLine(miniConsoleOutput, '[One-Click] Checking prerequisites...');
     const prereqs = await window.api.checkPrerequisites();
-    
+
     // If server.jar is missing, run auto-setup
     if (!prereqs.checks.serverJar) {
       appendSystemLine(miniConsoleOutput, '[One-Click] Server JAR missing - running auto-setup...');
@@ -1129,11 +1143,11 @@ async function oneClickStart() {
     // Start the server
     appendSystemLine(miniConsoleOutput, '[One-Click] Starting Minecraft server...');
     const serverResult = await window.api.startServer();
-    
+
     if (serverResult.success) {
       appendSystemLine(miniConsoleOutput, `[One-Click] Server started successfully (PID ${serverResult.pid})`);
       applyServerStatus('starting');
-      
+
       // Wait a bit then start the bot
       setTimeout(async () => {
         appendSystemLine(miniConsoleOutput, '[One-Click] Starting Discord bot...');
@@ -1286,13 +1300,13 @@ function switchPanel(id) {
 async function loadNetworkingPanel() {
   // Load all networking status
   await refreshAllNetworkingStatus();
-  
+
   // Load manual address
   loadManualAddress();
-  
+
   // Load server connections
   renderServerConnections();
-  
+
   // Setup event listeners
   setupNetworkingListeners();
 }
@@ -1302,7 +1316,7 @@ async function refreshAllNetworkingStatus() {
     const status = await window.api.getAllNetworkingStatus();
     networkingStatus = status;
     currentNetworkingMethod = status.selectedMethod || 'zerotier';
-    
+
     // Update all method statuses
     updateZeroTierStatus(status.zerotier);
     updateTailscaleStatus(status.tailscale);
@@ -1310,10 +1324,10 @@ async function refreshAllNetworkingStatus() {
     updatePortForwardingStatus(status.portForwarding);
     updatePlayitStatus(status.playitgg);
     updateManualStatus(status.manual);
-    
+
     // Select the current method tab
     selectMethodTab(currentNetworkingMethod);
-    
+
   } catch (e) {
     console.error('Failed to load networking status:', e);
   }
@@ -1326,7 +1340,7 @@ function selectMethodTab(method) {
   methodPanels.forEach(panel => {
     panel.classList.toggle('active', panel.id === `${method}-panel`);
   });
-  
+
   // Update server connections with new method
   renderServerConnections();
 }
@@ -1341,7 +1355,7 @@ function updateZeroTierStatus(info) {
   const connected = info.connected || false;
   const address = info.address || '';
   const networks = info.networks || [];
-  
+
   // Update badge and status text
   if (installed && running && connected && address) {
     ztStatusBadge.textContent = 'Connected';
@@ -1364,23 +1378,23 @@ function updateZeroTierStatus(info) {
     ztStatus.className = 'status-badge offline';
     ztStatus.textContent = 'Not Installed';
   }
-  
+
   ztAddress.textContent = address || '-';
-  
+
   // Show/hide copy button
   if (address) {
     btnCopyZt.style.display = 'inline-block';
   } else {
     btnCopyZt.style.display = 'none';
   }
-  
+
   // Show/hide action buttons
   btnInstallZerotier.style.display = !installed ? 'inline-block' : 'none';
   if (btnStartZerotier) {
     btnStartZerotier.style.display = (installed && !running) ? 'inline-block' : 'none';
   }
   btnJoinZerotier.style.display = (installed && running) ? 'inline-block' : 'none';
-  
+
   // Show networks section if running and has networks
   if (installed && running && networks.length > 0) {
     ztNetworks.style.display = 'block';
@@ -1392,7 +1406,7 @@ function updateZeroTierStatus(info) {
 
 function renderZeroTierNetworks(networks) {
   ztNetworksList.innerHTML = '';
-  
+
   networks.forEach(net => {
     const card = document.createElement('div');
     card.className = 'zt-network-card';
@@ -1414,7 +1428,7 @@ function updateTailscaleStatus(info) {
   const running = info.running || false;
   const address = info.address || '';
   const status = info.status || 'unknown';
-  
+
   // Update badge
   if (installed && running && address) {
     tsStatusBadge.textContent = 'Online';
@@ -1437,12 +1451,12 @@ function updateTailscaleStatus(info) {
     tsStatus.className = 'status-badge offline';
     tsStatus.textContent = 'Not Installed';
   }
-  
+
   tsAddress.textContent = address || '-';
-  
+
   // Show/hide copy button
   btnCopyTs.style.display = address ? 'inline-block' : 'none';
-  
+
   // Show/hide buttons
   btnInstallTailscale.style.display = !installed ? 'inline-block' : 'none';
   btnStartTailscale.style.display = installed && !running ? 'inline-block' : 'none';
@@ -1455,7 +1469,7 @@ function updateTailscaleStatus(info) {
 
 function updateLanStatus(info) {
   const addresses = info.addresses || [];
-  
+
   if (addresses.length > 0) {
     lanStatusBadge.textContent = 'Active';
     lanStatusBadge.className = 'method-status';
@@ -1469,7 +1483,7 @@ function updateLanStatus(info) {
 
 function renderLanAddresses(addresses) {
   lanAddressesList.innerHTML = '';
-  
+
   addresses.forEach(ip => {
     const item = document.createElement('div');
     item.className = 'lan-address-item';
@@ -1491,20 +1505,20 @@ function updatePortForwardingStatus(info) {
   const localOpen = info.localPortOpen || false;
   const externalPort = info.externalPort || 25565;
   const internalPort = info.internalPort || 25565;
-  
+
   pfPublicIp.textContent = publicIP || 'Detecting...';
   pfAddress.textContent = address || '-';
-  
+
   // Update displays
   pfExternalDisplay.textContent = externalPort;
   pfInternalDisplay.textContent = internalPort;
-  
+
   // Update local IP
   const localIPs = networkingStatus?.lan?.addresses || [];
   if (localIPs.length > 0) {
     pfLocalIp.textContent = localIPs[0].address;
   }
-  
+
   // Status
   if (localOpen) {
     pfLocalStatus.className = 'status-badge online';
@@ -1513,11 +1527,11 @@ function updatePortForwardingStatus(info) {
     pfLocalStatus.className = 'status-badge offline';
     pfLocalStatus.textContent = 'Port Closed';
   }
-  
+
   // Show/hide copy buttons
   btnCopyPfIp.style.display = publicIP ? 'inline-block' : 'none';
   btnCopyPf.style.display = address ? 'inline-block' : 'none';
-  
+
   pfStatusBadge.textContent = publicIP ? 'Configured' : 'Detecting...';
 }
 
@@ -1530,7 +1544,7 @@ function updatePlayitStatus(info) {
   const running = info.running || false;
   const address = info.address || '';
   const status = info.status || 'unknown';
-  
+
   // Update badge
   if (installed && running && address) {
     pgStatusBadge.textContent = 'Online';
@@ -1553,12 +1567,12 @@ function updatePlayitStatus(info) {
     pgStatus.className = 'status-badge offline';
     pgStatus.textContent = 'Not Installed';
   }
-  
+
   pgAddress.textContent = address || '-';
-  
+
   // Show/hide copy button
   btnCopyPg.style.display = address ? 'inline-block' : 'none';
-  
+
   // Show/hide buttons
   btnInstallPlayit.style.display = !installed ? 'inline-block' : 'none';
   btnStartPlayit.style.display = installed && !running ? 'inline-block' : 'none';
@@ -1570,7 +1584,7 @@ function updatePlayitStatus(info) {
 
 function updateManualStatus(info) {
   const address = info.address || '';
-  
+
   if (address) {
     manualStatusBadge.textContent = 'Configured';
     manualStatusBadge.className = 'method-status';
@@ -1587,10 +1601,10 @@ async function loadManualAddress() {
     manualAddressInput.value = manual.address || '';
     manualNotesInput.value = manual.notes || '';
     manualSavedAddress.textContent = manual.address || '-';
-    
+
     // Show/hide copy button
     btnCopyManual.style.display = manual.address ? 'inline-block' : 'none';
-    
+
     updateManualStatus(manual);
   } catch (e) {
     console.error('Failed to load manual address:', e);
@@ -1600,7 +1614,7 @@ async function loadManualAddress() {
 async function saveManualAddress() {
   const address = manualAddressInput.value.trim();
   const notes = manualNotesInput.value.trim();
-  
+
   try {
     const result = await window.api.saveManualAddress(address, notes);
     if (result.success) {
@@ -1608,10 +1622,10 @@ async function saveManualAddress() {
       manualSavedAddress.textContent = address || '-';
       btnCopyManual.style.display = address ? 'inline-block' : 'none';
       updateManualStatus({ address, notes });
-      
+
       // Refresh server connections
       renderServerConnections();
-      
+
       alert('Manual address saved successfully!');
     } else {
       alert('Failed to save: ' + result.error);
@@ -1633,33 +1647,33 @@ async function renderServerConnections() {
       connectionsEmptyState.style.display = 'block';
       return;
     }
-    
+
     connectionsEmptyState.style.display = 'none';
     serverConnectionsGrid.style.display = 'grid';
     serverConnectionsGrid.innerHTML = '';
-    
+
     const selectedMethod = serverMethodSelect.value || 'zerotier';
     const allStatus = await window.api.getAllServersStatus();
-    
+
     for (const [serverId, profile] of Object.entries(result.profiles)) {
       const serverStatus = allStatus.servers?.[serverId] || {};
       const serverPort = profile.serverPort || 25565;
-      
+
       // Get connection address for this server using the selected method
       const addressResult = await window.api.getServerConnectionAddress(
-        serverId, 
-        serverPort, 
+        serverId,
+        serverPort,
         selectedMethod
       );
-      
+
       const card = document.createElement('div');
       card.className = 'server-connection-card';
-      
-      const statusText = serverStatus.state === 'online' ? 'Online' : 
+
+      const statusText = serverStatus.state === 'online' ? 'Online' :
                         serverStatus.state === 'starting' ? 'Starting...' : 'Offline';
-      const statusClass = serverStatus.state === 'online' ? 'online' : 
+      const statusClass = serverStatus.state === 'online' ? 'online' :
                          serverStatus.state === 'starting' ? 'warning' : 'offline';
-      
+
       card.innerHTML = `
         <div class="server-conn-header">
           <span class="server-conn-name">${escapeHtml(profile.name || serverId)}</span>
@@ -1673,10 +1687,10 @@ async function renderServerConnections() {
           <button class="btn btn-sm flat-btn btn-copy-server" data-server-id="${serverId}" data-address="${addressResult.address || ''}">Copy</button>
         </div>
       `;
-      
+
       serverConnectionsGrid.appendChild(card);
     }
-    
+
     // Setup copy button listeners
     document.querySelectorAll('.btn-copy-server').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1689,7 +1703,7 @@ async function renderServerConnections() {
         }
       });
     });
-    
+
   } catch (e) {
     console.error('Failed to render server connections:', e);
     serverConnectionsGrid.innerHTML = '<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><h3>Error Loading Connections</h3><p>' + e.message + '</p></div>';
@@ -1709,14 +1723,14 @@ function setupNetworkingListeners() {
       window.api.selectNetworkingMethod(tab.dataset.method);
     });
   });
-  
+
   // Server method selector
   if (serverMethodSelect) {
     serverMethodSelect.addEventListener('change', () => {
       renderServerConnections();
     });
   }
-  
+
   // Copy buttons
   setupCopyButton(btnCopyZt, ztAddress);
   setupCopyButton(btnCopyTs, tsAddress);
@@ -1724,7 +1738,7 @@ function setupNetworkingListeners() {
   setupCopyButton(btnCopyPf, pfAddress);
   setupCopyButton(btnCopyPg, pgAddress);
   setupCopyButton(btnCopyManual, manualSavedAddress);
-  
+
   // ZeroTier buttons
   if (btnInstallZerotier) {
     btnInstallZerotier.addEventListener('click', async () => {
@@ -1769,13 +1783,13 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnRefreshZerotier) {
     btnRefreshZerotier.addEventListener('click', async () => {
       await refreshAllNetworkingStatus();
     });
   }
-  
+
   if (btnJoinZtNetwork) {
     btnJoinZtNetwork.addEventListener('click', async () => {
       const networkId = ztNetworkId.value.trim();
@@ -1783,7 +1797,7 @@ function setupNetworkingListeners() {
         alert('Please enter a network ID');
         return;
       }
-      
+
       const result = await window.api.joinZeroTierNetwork(networkId);
       if (result.success) {
         alert('Successfully joined ZeroTier network! The connection may take a moment to establish.');
@@ -1793,7 +1807,7 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   // Tailscale buttons
   if (btnInstallTailscale) {
     btnInstallTailscale.addEventListener('click', async () => {
@@ -1808,7 +1822,7 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnStartTailscale) {
     btnStartTailscale.addEventListener('click', async () => {
       const result = await window.api.startTailscale();
@@ -1820,7 +1834,7 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnStopTailscale) {
     btnStopTailscale.addEventListener('click', async () => {
       if (confirm('Stop Tailscale? Players currently connected via Tailscale will be disconnected.')) {
@@ -1834,13 +1848,13 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnRefreshTailscale) {
     btnRefreshTailscale.addEventListener('click', async () => {
       await refreshAllNetworkingStatus();
     });
   }
-  
+
   // Port Forwarding buttons
   if (btnRefreshPf) {
     btnRefreshPf.addEventListener('click', async () => {
@@ -1850,20 +1864,20 @@ function setupNetworkingListeners() {
       updatePortForwardingStatus(info);
     });
   }
-  
+
   // Port inputs - update on change
   if (pfExternalPort) {
     pfExternalPort.addEventListener('change', () => {
       pfExternalDisplay.textContent = pfExternalPort.value;
     });
   }
-  
+
   if (pfInternalPort) {
     pfInternalPort.addEventListener('change', () => {
       pfInternalDisplay.textContent = pfInternalPort.value;
     });
   }
-  
+
   // Playit.gg buttons
   if (btnInstallPlayit) {
     btnInstallPlayit.addEventListener('click', async () => {
@@ -1875,7 +1889,7 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnStartPlayit) {
     btnStartPlayit.addEventListener('click', async () => {
       const result = await window.api.startPlayit();
@@ -1886,13 +1900,13 @@ function setupNetworkingListeners() {
       }
     });
   }
-  
+
   if (btnRefreshPlayit) {
     btnRefreshPlayit.addEventListener('click', async () => {
       await refreshAllNetworkingStatus();
     });
   }
-  
+
   // Manual buttons
   if (btnSaveManual) {
     btnSaveManual.addEventListener('click', saveManualAddress);
@@ -1917,4 +1931,65 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+
+// ===========================================================================
+// Simple / Advanced Mode & Desktop Topbar Enhancements
+// ===========================================================================
+const btnModeSimple   = document.getElementById('btn-mode-simple');
+const btnModeAdvanced = document.getElementById('btn-mode-advanced');
+const topbarServerName = document.getElementById('topbar-server-name');
+const sidebarActiveServerName = document.getElementById('sidebar-active-server-name');
+const topbarStatusPill = document.getElementById('topbar-status-pill');
+const topbarStatusDot  = document.getElementById('topbar-status-dot');
+const topbarStatusText = document.getElementById('topbar-status-text');
+const serverSidebarLiveDot = document.getElementById('server-sidebar-live-dot');
+const btnDismissQuickstart = document.getElementById('btn-dismiss-quickstart');
+const quickstartDetailsBox = document.getElementById('quickstart-details-box');
+
+function setAppMode(mode) {
+  if (mode === 'advanced') {
+    document.body.classList.remove('mode-simple');
+    document.body.classList.add('mode-advanced');
+    if (btnModeSimple) btnModeSimple.classList.remove('active');
+    if (btnModeAdvanced) btnModeAdvanced.classList.add('active');
+  } else {
+    document.body.classList.remove('mode-advanced');
+    document.body.classList.add('mode-simple');
+    if (btnModeSimple) btnModeSimple.classList.add('active');
+    if (btnModeAdvanced) btnModeAdvanced.classList.remove('active');
+  }
+  try {
+    localStorage.setItem('shadow_ui_mode', mode);
+  } catch (e) {}
+}
+
+if (btnModeSimple) {
+  btnModeSimple.addEventListener('click', () => setAppMode('simple'));
+}
+if (btnModeAdvanced) {
+  btnModeAdvanced.addEventListener('click', () => setAppMode('advanced'));
+}
+
+if (btnDismissQuickstart && quickstartDetailsBox) {
+  btnDismissQuickstart.addEventListener('click', () => {
+    const isHidden = quickstartDetailsBox.style.display === 'none';
+    quickstartDetailsBox.style.display = isHidden ? 'block' : 'none';
+    btnDismissQuickstart.textContent = isHidden ? 'Hide Details' : 'Details';
+  });
+}
+
+function updateActiveServerDisplays(id) {
+  const displayName = (serverProfiles && serverProfiles[id] && serverProfiles[id].name) ? serverProfiles[id].name : id;
+  if (topbarServerName) topbarServerName.textContent = displayName;
+  if (sidebarActiveServerName) sidebarActiveServerName.textContent = displayName;
+}
+
+// Restore saved mode
+try {
+  const savedMode = localStorage.getItem('shadow_ui_mode') || 'simple';
+  setAppMode(savedMode);
+} catch (e) {
+  setAppMode('simple');
 }
