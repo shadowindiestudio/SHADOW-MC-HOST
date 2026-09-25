@@ -1,56 +1,67 @@
 /* ==========================================================================
-   SHADOW MC HOST — Windows Desktop Management Suite
-   Theme: Polished Obsidian Dark (Fluent Desktop + Minecraft Restrained Accent)
+   SHADOW MC HOST - Minecraft Desktop Visual System
+   Palette: Charcoal, Deep Brown (#17120D), Dirt (#3A2516, #5A3820),
+            Stone (#252525, #333333), Orange Accent (#E87519), Warm Yellow (#F5B82E)
+   Restrained green used strictly for active/online status indicators.
    ========================================================================== */
 
 :root {
-  /* Surface & Base Palette */
-  --bg-app: #0b0d12;
-  --bg-sidebar: #11141c;
-  --bg-surface: #151924;
-  --bg-elevated: #1b202e;
-  --bg-elevated-hover: #212738;
-  --bg-input: #11141d;
+  /* Foundations */
+  --bg-app: #0a0a0b;
+  --bg-sidebar: #120e0a;
+  --bg-topbar: #14100c;
+  --bg-panel: #0d0d0e;
+  --bg-card: #17130f;
+  --bg-card-alt: #1c1713;
+  --bg-card-hover: #221c17;
+  --bg-input: #100d0a;
+  --bg-console: #0e0c0a;
+  --bg-slot: #14100d;
 
-  /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-card: #222839;
-  --border-hover: #343c53;
-  --border-focus: #10b981;
+  /* Stone & Dirt Structural Elements */
+  --border-subtle: #292019;
+  --border-stone: #33281f;
+  --border-dirt: #4a3424;
+  --border-dirt-dark: #2a1d14;
+  --border-stone-light: #44372c;
+  --border-pixel-highlight: #5c432f;
+  --border-pixel-shadow: #0a0705;
+
+  /* Brand Accents (Orange & Warm Yellow) */
+  --accent-orange: #e87519;
+  --accent-orange-hover: #ff8826;
+  --accent-orange-active: #cf620e;
+  --accent-orange-dark: #9e4605;
+  --accent-yellow: #f5b82e;
+  --accent-yellow-hover: #ffc94d;
+  --accent-yellow-dark: #a87910;
+
+  /* Semantic Status */
+  --status-online: #38a169;
+  --status-online-glow: rgba(56, 161, 105, 0.2);
+  --status-warning: #f5b82e;
+  --status-offline: #a33232;
+  --status-error: #e53e3e;
 
   /* Typography */
-  --text-primary: #f3f5f8;
-  --text-secondary: #9aa3b5;
-  --text-muted: #5e687e;
-  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+  --text-primary: #f2f0ea;
+  --text-secondary: #9c978e;
+  --text-muted: #736d64;
+  --text-on-accent: #ffffff;
+  --font-pixel: 'Silkscreen', 'Pixelify Sans', monospace, sans-serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
 
-  /* Semantics */
-  --color-online: #10b981;
-  --color-online-glow: rgba(16, 185, 129, 0.18);
-  --color-offline: #ef4444;
-  --color-offline-glow: rgba(239, 68, 68, 0.15);
-  --color-warning: #f59e0b;
-  --color-warning-glow: rgba(245, 158, 11, 0.15);
-  --color-info: #3b82f6;
-
-  /* Buttons & Accents */
-  --btn-primary-bg: #10b981;
-  --btn-primary-hover: #059669;
-  --btn-primary-text: #ffffff;
-  --btn-danger-bg: #ef4444;
-  --btn-danger-hover: #dc2626;
-  --btn-secondary-bg: #222839;
-  --btn-secondary-hover: #2c344a;
-
-  /* Radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  /* Minecraft-inspired Box Shadow Bevels */
+  --mc-bevel-btn: inset 2px 2px 0 rgba(255, 255, 255, 0.12), inset -2px -2px 0 rgba(0, 0, 0, 0.55), 0 2px 0 #000;
+  --mc-bevel-btn-pressed: inset 2px 2px 0 rgba(0, 0, 0, 0.6), inset -2px -2px 0 rgba(255, 255, 255, 0.08);
+  --mc-bevel-btn-orange: inset 2px 2px 0 #ff9f4d, inset -2px -2px 0 #8f4007, 0 2px 0 #000;
+  --mc-bevel-card: 0 0 0 1px var(--border-stone), 0 2px 0 0 var(--border-dirt-dark);
+  --mc-bevel-slot: inset 2px 2px 0 #0c0907, inset -2px -2px 0 #2e2218, 0 1px 0 var(--border-stone);
 }
 
 /* ==========================================================================
-   Base Reset
+   RESET & BASE STYLES
    ========================================================================== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -58,78 +69,93 @@
   padding: 0;
 }
 
-body {
-  font-family: var(--font-ui);
-  background-color: var(--bg-app);
-  color: var(--text-primary);
-  height: 100vh;
-  overflow: hidden;
-  user-select: none;
-  -webkit-font-smoothing: antialiased;
-  -webkit-app-region: no-drag;
-}
-
-/* Custom Scrollbar for Windows Feel */
-::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-::-webkit-scrollbar-track {
-  background: var(--bg-app);
-}
-::-webkit-scrollbar-thumb {
-  background: #252c3e;
-  border-radius: var(--radius-sm);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #37415b;
-}
-
-/* ==========================================================================
-   Layout Shell
-   ========================================================================== */
-.app-container {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  height: 100vh;
-  width: 100vw;
-  background-color: var(--bg-app);
-}
-
-/* ==========================================================================
-   Sidebar
-   ========================================================================== */
-.sidebar {
-  background-color: var(--bg-sidebar);
-  border-right: 1px solid var(--border-card);
-  display: flex;
-  flex-direction: column;
+html, body {
+  width: 100%;
   height: 100%;
   overflow: hidden;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Typography helpers */
+.font-pixel {
+  font-family: var(--font-pixel) !important;
+  letter-spacing: 0.5px;
+}
+
+.font-pixel-sub {
+  font-family: var(--font-pixel) !important;
+  font-size: 9px !important;
+  letter-spacing: 1px;
+}
+
+/* Tabular numbers for live server statistics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ==========================================================================
+   APP CONTAINER & LAYOUT
+   ========================================================================== */
+.app-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+/* ==========================================================================
+   SIDEBAR (Minecraft Obsidian / Deep Slate / Dirt Motif)
+   ========================================================================== */
+.sidebar {
+  width: 250px;
+  min-width: 250px;
+  height: 100%;
+  background-color: var(--bg-sidebar);
+  border-right: 2px solid var(--border-stone);
+  box-shadow: 2px 0 0 var(--border-dirt-dark);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
 }
 
 .sidebar-header {
-  padding: 18px 16px 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 16px 14px;
+  border-bottom: 2px solid var(--border-stone);
+  background: linear-gradient(180deg, #18130e 0%, #120e0a 100%);
 }
 
 .brand-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.brand-logo {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #10b981 0%, #047857 100%);
-  border-radius: var(--radius-sm);
+.brand-logo-frame {
+  width: 36px;
+  height: 36px;
+  background: #1a1510;
+  border: 2px solid var(--border-dirt);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.08), inset -1px -1px 0 #0a0705;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.25);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.brand-logo-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .brand-text {
@@ -138,36 +164,37 @@ body {
 }
 
 .app-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-primary);
+  color: var(--accent-orange);
+  text-shadow: 1px 1px 0 #000;
   line-height: 1.2;
 }
 
 .app-subtitle {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--text-muted);
+  color: var(--accent-yellow);
+  text-shadow: 1px 1px 0 #000;
+  line-height: 1.2;
 }
 
-/* Sidebar Server Indicator Chip */
+/* Sidebar Active Server Chip */
 .sidebar-server-chip {
-  margin: 12px 14px 6px 14px;
+  margin: 12px 14px 6px;
   padding: 8px 10px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
+  background: var(--bg-slot);
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
 }
 
 .chip-label {
   display: block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-family: var(--font-pixel);
+  font-size: 8.5px;
   color: var(--text-muted);
-  margin-bottom: 3px;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
 }
 
 .chip-content {
@@ -177,221 +204,219 @@ body {
 }
 
 .server-dot-live {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--status-offline);
+  box-shadow: 0 0 0 1px #000;
   flex-shrink: 0;
 }
 
 .server-dot-live.online {
-  background-color: var(--color-online);
-  box-shadow: 0 0 6px var(--color-online);
-}
-
-.server-dot-live.offline {
-  background-color: var(--color-offline);
+  background: var(--status-online);
 }
 
 .server-dot-live.warning {
-  background-color: var(--color-warning);
+  background: var(--status-warning);
 }
 
 .chip-name {
-  font-size: 12px;
   font-weight: 600;
+  font-size: 12px;
   color: var(--text-primary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Navigation Menu */
 .nav-menu {
-  padding: 8px 10px;
   flex: 1;
+  padding: 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   overflow-y: auto;
 }
 
 .nav-btn {
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
-  text-align: left;
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: all 120ms ease;
-}
-
-.nav-btn:hover {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
-}
-
-.nav-btn.active {
-  background-color: var(--bg-surface);
-  border-color: var(--border-card);
-  color: var(--color-online);
-  font-weight: 600;
+  text-align: left;
+  transition: all 0.1s ease;
 }
 
 .nav-icon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   fill: currentColor;
   flex-shrink: 0;
 }
 
-/* Sidebar Footer */
+.nav-btn:hover {
+  background: #1b1611;
+  color: var(--text-primary);
+  border-color: var(--border-stone);
+}
+
+.nav-btn.active {
+  background: #251b14;
+  color: var(--accent-orange);
+  border: 1px solid var(--border-dirt);
+  box-shadow: inset 2px 0 0 var(--accent-orange), inset 0 1px 0 rgba(255,255,255,0.05);
+  font-weight: 600;
+}
+
+.nav-btn.active .nav-icon {
+  fill: var(--accent-orange);
+}
+
+/* Sidebar Footer (Daemons Status) */
 .sidebar-footer {
-  padding: 12px 16px;
-  background-color: var(--bg-surface);
-  border-top: 1px solid var(--border-subtle);
+  padding: 12px 14px;
+  background: #100c09;
+  border-top: 2px solid var(--border-stone);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .status-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--status-offline);
+  box-shadow: 0 0 0 1px #000;
   flex-shrink: 0;
 }
 
 .status-dot.online {
-  background-color: var(--color-online);
-  box-shadow: 0 0 6px var(--color-online);
-}
-
-.status-dot.offline {
-  background-color: var(--color-offline);
+  background: var(--status-online);
 }
 
 .status-dot.warning {
-  background-color: var(--color-warning);
+  background: var(--status-warning);
 }
 
 /* ==========================================================================
-   Main Content Area
+   TOPBAR (Desktop Window Utility Header)
    ========================================================================== */
 .main-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
-  background-color: var(--bg-app);
+  background: var(--bg-panel);
 }
 
-/* Topbar Utility Strip */
 .app-topbar {
-  height: 44px;
-  padding: 0 20px;
-  background-color: var(--bg-sidebar);
-  border-bottom: 1px solid var(--border-card);
+  height: 48px;
+  min-height: 48px;
+  background-color: var(--bg-topbar);
+  border-bottom: 2px solid var(--border-stone);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-shrink: 0;
+  padding: 0 20px;
+  z-index: 5;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .server-indicator-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  background: var(--bg-slot);
+  padding: 4px 10px;
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
 }
 
 .server-indicator-label {
+  font-family: var(--font-pixel);
+  font-size: 8.5px;
   color: var(--text-muted);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.05em;
 }
 
 .server-indicator-name {
-  color: var(--text-primary);
   font-weight: 600;
-  background-color: var(--bg-elevated);
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
+  font-size: 12px;
+  color: var(--accent-yellow);
 }
 
 .server-status-pill {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 8px;
-  border-radius: 12px;
+  padding: 3px 8px;
+  border-radius: 2px;
   font-size: 11px;
   font-weight: 600;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background: #1e1313;
+  color: #d16b6b;
+  border: 1px solid #4a1f1f;
 }
 
 .server-status-pill.online {
-  border-color: rgba(16, 185, 129, 0.4);
-  color: var(--color-online);
-}
-
-.server-status-pill.offline {
-  border-color: rgba(239, 68, 68, 0.3);
-  color: var(--color-offline);
+  background: #112216;
+  color: #48bb78;
+  border-color: #1d4d29;
 }
 
 .server-status-pill.warning {
-  border-color: rgba(245, 158, 11, 0.4);
-  color: var(--color-warning);
+  background: #241d0f;
+  color: #f5b82e;
+  border-color: #5c4314;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
+/* Simple / Advanced Mode Switcher */
 .mode-switch-group {
   display: flex;
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
+  background: #120e0a;
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
   padding: 2px;
+  gap: 2px;
 }
 
 .mode-btn {
   background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 4px 12px;
   font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: var(--radius-sm);
+  font-family: var(--font-pixel);
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all 0.1s ease;
 }
 
 .mode-btn:hover {
@@ -399,15 +424,16 @@ body {
 }
 
 .mode-btn.active {
-  background-color: var(--bg-surface);
-  color: var(--color-online);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  background: #2b1f16;
+  color: var(--accent-orange);
+  border: 1px solid var(--border-dirt);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.1), 0 1px 0 #000;
 }
 
 .topbar-divider {
   width: 1px;
-  height: 16px;
-  background-color: var(--border-card);
+  height: 20px;
+  background: var(--border-stone);
 }
 
 .live-clock-container {
@@ -415,15 +441,13 @@ body {
   align-items: center;
   gap: 6px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--font-mono);
 }
 
-.clock-icon {
-  fill: var(--text-muted);
-}
-
-/* Panel Containers */
+/* ==========================================================================
+   PANEL LAYOUT
+   ========================================================================== */
 .panel {
   display: none;
   flex: 1;
@@ -437,41 +461,36 @@ body {
 
 .panel-header {
   margin-bottom: 20px;
-}
-
-.panel-header.space-between {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  border-bottom: 2px solid var(--border-stone);
+  padding-bottom: 12px;
 }
 
-.panel-header-title h2 {
-  font-size: 20px;
-  font-weight: 700;
+.panel-header h2 {
+  font-family: var(--font-pixel);
+  font-size: 16px;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: 0.5px;
 }
 
 .panel-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 
 /* ==========================================================================
-   Shared Cards & Controls
+   MINECRAFT CARDS & SURFACES
    ========================================================================== */
 .card {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  padding: 18px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-stone);
+  box-shadow: var(--mc-bevel-card);
+  padding: 16px;
   margin-bottom: 16px;
-  transition: border-color 120ms ease;
-}
-
-.card:hover {
-  border-color: var(--border-hover);
+  position: relative;
 }
 
 .card-header {
@@ -479,6 +498,8 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .card-title-group {
@@ -487,180 +508,144 @@ body {
   gap: 8px;
 }
 
-.card-title-group h3,
 .card-header h3 {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.card-type-icon {
-  fill: var(--text-muted);
+.card-header h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
+/* Status Badges */
 .status-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 9px;
-  border-radius: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-family: var(--font-pixel);
+  border-radius: 1px;
+  background: #2b1212;
+  color: #e57373;
+  border: 1px solid #522020;
 }
 
 .status-badge.online {
-  background-color: var(--color-online-glow);
-  color: var(--color-online);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-}
-
-.status-badge.offline {
-  background-color: var(--color-offline-glow);
-  color: var(--color-offline);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: #112616;
+  color: #48bb78;
+  border-color: #1e4d29;
 }
 
 .status-badge.warning {
-  background-color: var(--color-warning-glow);
-  color: var(--color-warning);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: #2b220d;
+  color: #f5b82e;
+  border-color: #634b17;
 }
 
-/* Buttons */
+/* ==========================================================================
+   MINECRAFT BUTTON SYSTEM
+   ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-family: var(--font-ui);
-  font-size: 13px;
+  gap: 8px;
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 7px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 120ms ease;
-  white-space: nowrap;
+  background: #2b2620;
+  color: var(--text-primary);
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-btn);
+  transition: transform 0.05s ease, background 0.1s ease;
+  user-select: none;
+}
+
+.btn:hover:not(:disabled) {
+  background: #363028;
+  border-color: var(--border-stone-light);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--mc-bevel-btn-pressed);
 }
 
 .btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed !important;
-  pointer-events: none;
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(80%);
 }
 
+/* Primary Orange Action Button */
 .btn-primary {
-  background-color: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  background: var(--accent-orange);
+  color: #ffffff;
+  border: 1px solid var(--accent-orange-dark);
+  box-shadow: var(--mc-bevel-btn-orange);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--btn-primary-hover);
+  background: var(--accent-orange-hover);
+  border-color: #b05007;
 }
 
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-orange-active);
+  box-shadow: inset 2px 2px 0 #5c2702, inset -2px -2px 0 rgba(255,255,255,0.15);
+}
+
+/* Danger Button */
 .btn-danger {
-  background-color: var(--btn-danger-bg);
-  color: #fff;
+  background: #8f2b2b;
+  color: #ffffff;
+  border: 1px solid #5c1818;
+  box-shadow: inset 2px 2px 0 #c24444, inset -2px -2px 0 #421010, 0 2px 0 #000;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background-color: var(--btn-danger-hover);
+  background: #a83535;
 }
 
+/* Secondary Button */
 .btn-secondary {
-  background-color: var(--btn-secondary-bg);
-  color: var(--text-primary);
-  border-color: var(--border-card);
+  background: #1f1b16;
+  border-color: var(--border-stone);
+  color: var(--text-secondary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--btn-secondary-hover);
-  border-color: var(--border-hover);
+  background: #29241e;
+  color: var(--text-primary);
 }
 
+/* Button Sizes */
 .btn-sm {
-  font-size: 12px;
-  padding: 5px 10px;
+  padding: 4px 10px;
+  font-size: 11px;
 }
 
 .btn-lg {
-  font-size: 14px;
-  padding: 10px 20px;
-}
-
-.btn-subtle {
-  background: transparent;
-  border: 1px solid var(--border-card);
-  color: var(--text-secondary);
-}
-
-.btn-subtle:hover {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-}
-
-/* Forms & Inputs */
-.form-group {
-  margin-bottom: 14px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-bottom: 5px;
-}
-
-input[type="text"],
-input[type="number"],
-input[type="password"],
-textarea,
-select {
-  width: 100%;
-  padding: 8px 12px;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 120ms ease;
-}
-
-input[type="text"]:focus,
-input[type="number"]:focus,
-input[type="password"]:focus,
-textarea:focus,
-select:focus {
-  border-color: var(--border-focus);
-}
-
-.form-note {
-  display: block;
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-
-.input-with-btn {
-  display: flex;
-  gap: 8px;
-}
-
-.password-input-container {
-  display: flex;
-  gap: 6px;
+  padding: 12px 24px;
+  font-size: 13.5px;
+  font-family: var(--font-pixel);
+  letter-spacing: 0.5px;
 }
 
 /* ==========================================================================
-   Dashboard Panel Components
+   DASHBOARD SPECIFIC STYLES
    ========================================================================== */
 .quickstart-card {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(21, 25, 36, 1) 70%);
-  border: 1px solid rgba(16, 185, 129, 0.35);
-  margin-bottom: 20px;
+  background: linear-gradient(180deg, #1f1710 0%, #15110d 100%);
+  border: 2px solid var(--border-dirt);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.06), 0 3px 0 0 var(--border-dirt-dark);
+  padding: 20px;
 }
 
 .quickstart-header {
@@ -673,57 +658,56 @@ select:focus {
 .quickstart-title-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .quickstart-badge {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 6px;
-  background-color: rgba(16, 185, 129, 0.2);
-  color: var(--color-online);
-  border-radius: var(--radius-sm);
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  background: #2d1d11;
+  color: var(--accent-yellow);
+  padding: 3px 7px;
+  border: 1px solid var(--border-dirt);
 }
 
 .quickstart-desc {
-  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 12px;
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}
+
+.quickstart-details {
+  background: var(--bg-slot);
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
+  padding: 12px 16px;
+  margin-bottom: 16px;
 }
 
 .quickstart-list {
   list-style: none;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px 16px;
-  margin-bottom: 14px;
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 10px 14px;
-  border-radius: var(--radius-sm);
+  gap: 8px;
 }
 
 .quickstart-list li {
-  font-size: 12px;
-  color: var(--text-secondary);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .quickstart-list li span {
-  color: var(--color-online);
+  color: var(--accent-orange);
   font-weight: 700;
-}
-
-.quickstart-actions {
-  margin-bottom: 8px;
 }
 
 .quickstart-note {
   font-size: 11px;
   color: var(--text-muted);
+  margin-top: 10px;
 }
 
 /* Process Cards Grid */
@@ -734,65 +718,61 @@ select:focus {
   margin-bottom: 16px;
 }
 
-.process-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+.process-card .card-body {
+  margin-bottom: 16px;
 }
 
 .metric-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  font-size: 13px;
-  margin-bottom: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.metric-row.space-top {
+  margin-top: 12px;
 }
 
 .metric-label {
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
 .metric-value {
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.uptime-num {
-  color: var(--color-online);
 }
 
 .command-badge {
-  background-color: var(--bg-elevated);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--bg-slot);
+  border: 1px solid var(--border-stone);
+  padding: 2px 8px;
+  font-size: 11.5px;
+  color: var(--accent-yellow);
 }
 
 .progress-bar-container {
-  height: 6px;
-  background-color: var(--bg-elevated);
-  border-radius: 3px;
+  width: 100%;
+  height: 10px;
+  background: var(--bg-slot);
+  border: 1px solid var(--border-stone);
+  box-shadow: inset 1px 1px 0 #000;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #10b981, #059669);
-  transition: width 200ms ease;
+  background: var(--accent-orange);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+  transition: width 0.3s ease;
 }
 
 .card-actions {
   display: flex;
   gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 /* Widgets Row */
@@ -809,42 +789,33 @@ select:focus {
 
 .widget-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.widget-header h4 {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .widget-sub-tag {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
+  font-family: var(--font-pixel);
 }
 
 .widget-large-val {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
+  color: var(--accent-orange);
   font-family: var(--font-mono);
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
+  margin-bottom: 8px;
 }
 
 .tps-sub {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
 }
 
-/* Mini Console */
+/* Mini Console Preview */
 .mini-console-card {
-  padding: 14px;
+  margin-bottom: 16px;
 }
 
 .console-tab-tag {
@@ -854,100 +825,60 @@ select:focus {
 }
 
 .terminal-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--color-online);
+  width: 7px;
+  height: 7px;
+  background: var(--accent-orange);
+  border-radius: 1px;
 }
 
-.mini-console-card h4 {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+/* ==========================================================================
+   CONSOLE STYLING (Command-block & Minecraft Terminal Motif)
+   ========================================================================== */
+.console-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 160px);
+  background: var(--bg-console);
+  border: 2px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
+}
+
+.console-main-box {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #dedede;
+}
+
+.console-output-box {
+  background: #0d0b09;
 }
 
 .mini-console-body {
-  height: 120px;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
+  height: 140px;
   padding: 10px;
-  font-family: var(--font-mono);
-  font-size: 12px;
   overflow-y: auto;
-  line-height: 1.45;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  border: 1px solid var(--border-stone);
+  box-shadow: var(--mc-bevel-slot);
 }
 
 .console-line {
-  color: #abb2bf;
   word-break: break-all;
   white-space: pre-wrap;
 }
 
 .console-line.system-line {
-  color: var(--color-info);
-}
-
-.console-line.warn-line {
-  color: var(--color-warning);
+  color: var(--accent-yellow);
 }
 
 .console-line.error-line {
-  color: var(--color-offline);
-}
-
-/* ==========================================================================
-   Console Panel
-   ========================================================================== */
-.console-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.toggle-tabs {
-  display: flex;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-}
-
-.tab-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.tab-btn.active {
-  background-color: var(--bg-elevated);
-  color: var(--text-primary);
-}
-
-.console-container {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 120px);
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.console-main-box {
-  flex: 1;
-  background-color: #0b0d13;
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.5;
-  overflow-y: auto;
+  color: var(--status-error);
 }
 
 .console-input-bar {
@@ -955,148 +886,167 @@ select:focus {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  background-color: var(--bg-surface);
-  border-top: 1px solid var(--border-card);
+  background: #14100c;
+  border-top: 2px solid var(--border-dirt);
 }
 
 .console-prompt {
   font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--color-online);
+  font-size: 14px;
+  color: var(--accent-orange);
 }
 
-.console-input-bar input {
+#console-input-field {
   flex: 1;
-  background-color: var(--bg-input);
-  border: 1px solid var(--border-card);
+  background: var(--bg-input);
+  border: 1px solid var(--border-stone);
+  box-shadow: inset 1px 1px 0 #000;
+  color: var(--text-primary);
   padding: 7px 12px;
   font-family: var(--font-mono);
-  font-size: 13px;
-}
-
-/* ==========================================================================
-   Players Panel
-   ========================================================================== */
-.players-total-count {
   font-size: 12px;
-  font-weight: 600;
-  color: var(--color-online);
-  background-color: var(--color-online-glow);
-  padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  outline: none;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  background-color: var(--bg-surface);
-  border: 1px dashed var(--border-card);
-  border-radius: var(--radius-md);
+#console-input-field:focus {
+  border-color: var(--accent-orange);
 }
 
-.empty-icon-wrap {
+.toggle-tabs {
+  display: flex;
+  background: #14100c;
+  border: 1px solid var(--border-dirt);
+  padding: 2px;
+  gap: 2px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  padding: 4px 12px;
+  font-size: 11.5px;
+  cursor: pointer;
 }
 
-.empty-state h3 {
-  font-size: 16px;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.empty-state p {
-  font-size: 13px;
-  color: var(--text-secondary);
-  max-width: 380px;
-  margin: 0 auto;
-}
-
-.players-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-}
-
-.player-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-}
-
-.player-avatar {
-  width: 32px;
-  height: 32px;
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-hover);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: var(--color-online);
-  font-size: 14px;
-  margin-right: 10px;
-}
-
-.player-info {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.player-name {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.badge-op {
-  font-size: 10px;
-  font-weight: 700;
-  background-color: var(--color-warning-glow);
-  color: var(--color-warning);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-
-.player-actions {
-  display: flex;
-  gap: 6px;
+.tab-btn.active {
+  background: #2b1f16;
+  color: var(--accent-orange);
+  border: 1px solid var(--border-dirt);
 }
 
 /* ==========================================================================
-   Settings Panel
+   PLAYERS PANEL (Minecraft Inventory Slot Row Presentation)
+   ========================================================================== */
+.table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border-stone);
+  box-shadow: var(--mc-bevel-card);
+  overflow-x: auto;
+}
+
+.players-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.players-table th {
+  background: #14100c;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-family: var(--font-pixel);
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border-stone);
+}
+
+.players-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12.5px;
+}
+
+.players-table tr:hover {
+  background: #1c1713;
+}
+
+.player-empty-state {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ==========================================================================
+   SETTINGS & FORM CONTROLS
    ========================================================================== */
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-}
-
-.section-badge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.settings-section h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .settings-section-full {
-  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.section-badge {
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-size: 8.5px;
+  color: var(--accent-yellow);
+  background: #251b14;
+  padding: 2px 6px;
+  border: 1px solid var(--border-dirt);
+  margin-bottom: 8px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.form-group input[type='text'],
+.form-group input[type='number'],
+.form-group input[type='password'],
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-stone);
+  box-shadow: inset 1px 1px 0 #000;
+  color: var(--text-primary);
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: var(--accent-orange);
+}
+
+.form-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.password-input-container {
+  display: flex;
+  gap: 6px;
 }
 
 .toggle-list {
@@ -1110,31 +1060,32 @@ select:focus {
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background-color: var(--bg-elevated);
-  border-radius: var(--radius-sm);
+  background: #14100c;
+  border: 1px solid var(--border-stone);
 }
 
 .toggle-row-label {
   display: flex;
   flex-direction: column;
+  gap: 2px;
 }
 
 .toggle-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--text-primary);
 }
 
 .toggle-desc {
   font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
+  color: var(--text-muted);
 }
 
+/* Switch */
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 38px;
+  width: 36px;
   height: 20px;
   flex-shrink: 0;
 }
@@ -1148,64 +1099,73 @@ select:focus {
 .toggle-slider {
   position: absolute;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #2a3144;
-  border-radius: 20px;
-  transition: 150ms;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #2b221a;
+  border: 1px solid var(--border-stone);
+  box-shadow: inset 1px 1px 0 #000;
+  transition: .15s;
 }
 
 .toggle-slider:before {
   position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
+  content: '';
+  height: 12px;
+  width: 12px;
   left: 3px;
   bottom: 3px;
-  background-color: #fff;
-  border-radius: 50%;
-  transition: 150ms;
+  background-color: var(--text-muted);
+  box-shadow: 1px 1px 0 #000;
+  transition: .15s;
 }
 
-.toggle-switch input:checked + .toggle-slider {
-  background-color: var(--color-online);
+input:checked + .toggle-slider {
+  background-color: var(--accent-orange);
 }
 
-.toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(18px);
+input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+  background-color: #ffffff;
 }
 
 .settings-footer {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 16px;
   margin-bottom: 24px;
 }
 
 .save-status-msg {
   font-size: 12px;
-  color: var(--color-online);
+  color: var(--accent-yellow);
 }
 
 /* Danger Zone */
 .danger-zone {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(21, 25, 36, 1) 80%);
+  background: #1c1111;
+  border: 2px solid #522020;
+  box-shadow: 0 0 0 1px #260e0e;
 }
 
 .danger-header {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .danger-title-wrap {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--color-offline);
-  margin-bottom: 4px;
+  color: #e57373;
+}
+
+.danger-title-wrap h3 {
+  font-size: 13.5px;
+  color: #e57373;
+}
+
+.danger-header p {
+  font-size: 11.5px;
+  color: #b08d8d;
+  margin-top: 4px;
 }
 
 .danger-actions-row {
@@ -1214,400 +1174,188 @@ select:focus {
 }
 
 /* ==========================================================================
-   Server Profiles Panel & Modal
+   SERVERS PANEL (Profile Management & Cards)
    ========================================================================== */
-.server-profiles-grid {
+.servers-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.servers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
 
 .server-profile-card {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  border: 2px solid var(--border-stone);
+  box-shadow: var(--mc-bevel-card);
   padding: 16px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  transition: all 120ms ease;
+  position: relative;
 }
 
-.server-profile-card.active {
-  border-color: var(--color-online);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.15);
+.server-profile-card.active-profile {
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 1px var(--accent-orange), 0 3px 0 0 var(--border-dirt-dark);
 }
 
 .server-profile-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
 .server-profile-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--text-primary);
 }
 
-.server-profile-id {
-  font-size: 11px;
-  font-family: var(--font-mono);
-  background-color: var(--bg-elevated);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-
 .server-profile-meta {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   margin-bottom: 14px;
 }
 
-.server-profile-actions {
+/* ==========================================================================
+   NETWORKING PANEL
+   ========================================================================== */
+.networking-tabs {
   display: flex;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
+  gap: 4px;
+  margin-bottom: 16px;
+  background: #14100c;
+  padding: 3px;
+  border: 1px solid var(--border-stone);
 }
 
-/* Modal Window */
+.net-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.net-tab-btn.active {
+  background: #2b1f16;
+  color: var(--accent-orange);
+  border: 1px solid var(--border-dirt);
+}
+
+.method-panel {
+  display: none;
+}
+
+.method-panel.active {
+  display: block;
+}
+
+.net-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-stone);
+  box-shadow: var(--mc-bevel-card);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.net-address-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-slot);
+  border: 1px solid var(--border-dirt);
+  box-shadow: var(--mc-bevel-slot);
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+
+.net-address-display {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-yellow);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   MODAL / DIALOG (Minecraft GUI Window Motif)
+   ========================================================================== */
 .modal-overlay {
   display: none;
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(2px);
-  z-index: 1000;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 100;
   align-items: center;
   justify-content: center;
 }
 
-.modal {
-  width: 480px;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-hover);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-content {
+  background: #1b1612;
+  border: 3px solid var(--border-dirt);
+  box-shadow: inset 2px 2px 0 var(--border-pixel-highlight), inset -2px -2px 0 var(--border-pixel-shadow), 0 12px 32px rgba(0,0,0,0.8);
+  width: 520px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 24px;
 }
 
 .modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-card);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 2px solid var(--border-stone);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .modal-header h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.modal-close:hover {
-  color: var(--text-primary);
-}
-
-.modal-body {
-  padding: 20px;
-  max-height: 70vh;
-  overflow-y: auto;
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--accent-orange);
 }
 
 .modal-footer {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border-card);
-  background-color: var(--bg-elevated);
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-}
-
-/* ==========================================================================
-   Networking Panel
-   ========================================================================== */
-.networking-intro {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.methods-card-header {
-  margin-bottom: 14px;
-}
-
-.method-tabs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 8px;
-}
-
-.method-tab {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  transition: all 120ms ease;
-  color: var(--text-secondary);
-}
-
-.method-tab:hover {
-  background-color: var(--bg-elevated-hover);
-  border-color: var(--border-hover);
-  color: var(--text-primary);
-}
-
-.method-tab.active {
-  background-color: var(--bg-app);
-  border-color: var(--color-online);
-  color: var(--color-online);
-}
-
-.method-icon {
-  font-size: 18px;
-}
-
-.method-name {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.method-status {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.networking-method-panel {
-  display: none;
-}
-
-.networking-method-panel.active {
-  display: block;
-}
-
-.adapter-header {
-  margin-bottom: 14px;
-}
-
-.adapter-title-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.adapter-badge {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.adapter-badge.recommended {
-  background-color: rgba(16, 185, 129, 0.2);
-  color: var(--color-online);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-}
-
-.method-status-section {
-  background-color: var(--bg-elevated);
-  padding: 14px;
-  border-radius: var(--radius-sm);
-  margin-bottom: 14px;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
-}
-
-.status-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-}
-
-.row-label {
-  color: var(--text-secondary);
-}
-
-.address-copy-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.address-display {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  background-color: var(--bg-app);
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-card);
-}
-
-.method-actions {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.method-info {
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.method-info ol,
-.method-info ul {
-  margin-left: 20px;
-  margin-top: 6px;
-}
-
-.method-info a {
-  color: var(--color-online);
-  text-decoration: none;
-}
-
-.method-info a:hover {
-  text-decoration: underline;
-}
-
-.form-grid-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-/* Server Connections Grid */
-.server-connections-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.server-connection-card {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-}
-
-.server-conn-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.server-conn-name {
-  font-size: 13px;
-  font-weight: 600;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* ==========================================================================
-   Setup Panel
-   ========================================================================== */
-.setup-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.section-title-wrap {
-  margin-bottom: 12px;
-}
-
-.section-title-wrap h3 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.section-title-wrap p {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 3px;
-}
-
-.prereqs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.prereq-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background-color: var(--bg-elevated);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-
-.prereq-ready {
-  color: var(--color-online);
-  font-weight: 600;
-}
-
-.prereq-missing {
-  color: var(--color-offline);
-  font-weight: 600;
-}
-
-.setup-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.setup-step {
-  padding: 10px 14px;
-  background-color: var(--bg-elevated);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* ==========================================================================
-   Simple Mode Progressive Disclosure
+   SIMPLE VS ADVANCED MODE VISIBILITY RULES
    ========================================================================== */
 body.mode-simple .advanced-only {
   display: none !important;
 }
 
-body.mode-advanced .advanced-only {
-  display: block;
+body.mode-advanced .simple-only {
+  display: none !important;
+}
+
+/* ==========================================================================
+   DESKTOP RESPONSIVE TUNING
+   ========================================================================== */
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .widgets-row {
+    grid-template-columns: 1fr;
+  }
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
