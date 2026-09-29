@@ -31,10 +31,9 @@ const SERVER_PID_PATH = paths.legacyServerPidPath();
 const BOT_PID_PATH    = paths.botPidPath();
 const SETUP_LOCK_PATH = paths.setupLockPath();
 
-// Legacy single-server paths — now resolved dynamically per active server
-const SERVER_DIR   = path.join(paths.getManagerDir(), '..', 'server'); // legacy fallback only
-const SERVER_PROPERTIES_PATH = path.join(SERVER_DIR, 'server.properties'); // legacy fallback
-const SERVER_LOG_PATH = path.join(SERVER_DIR, 'logs', 'latest.log'); // legacy fallback
+// Legacy single-server paths — now resolved dynamically per active server via getServerDirectory()
+// (SERVER_DIR / SERVER_PROPERTIES_PATH / SERVER_LOG_PATH constants removed — use getServerDirectory(id), 
+//  getServerPropertiesPath(id), getServerLogPath(id) instead)
 
 // Config file paths (writable, under userData)
 const SERVERS_CONFIG_PATH = paths.serversConfigPath();
@@ -176,20 +175,22 @@ function downloadFile(url, dest) {
 async function autoSetupServer() {
   const setupSteps = [];
 
-  // Create server directory
-  if (!fs.existsSync(SERVER_DIR)) {
-    fs.mkdirSync(SERVER_DIR, { recursive: true });
+  // Use the active server's directory (from servers.json), not the legacy repo path
+  const setupServerDir = getServerDirectory(getActiveServerId());
+  if (!fs.existsSync(setupServerDir)) {
+    fs.mkdirSync(setupServerDir, { recursive: true });
     setupSteps.push('Created server directory');
   }
 
   // Create eula.txt
-  if (!fs.existsSync(path.join(SERVER_DIR, 'eula.txt'))) {
-    fs.writeFileSync(path.join(SERVER_DIR, 'eula.txt'), 'eula=true', 'utf8');
+  if (!fs.existsSync(path.join(setupServerDir, 'eula.txt'))) {
+    fs.writeFileSync(path.join(setupServerDir, 'eula.txt'), 'eula=true', 'utf8');
     setupSteps.push('Created eula.txt');
   }
 
   // Create server.properties
-  if (!fs.existsSync(SERVER_PROPERTIES_PATH)) {
+  const setupPropsPath = path.join(setupServerDir, 'server.properties');
+  if (!fs.existsSync(setupPropsPath)) {
     const defaultProps = `server-port=25565
 enable-rcon=true
 rcon.port=25575
@@ -203,17 +204,17 @@ motd=A Shadow MC Host Server
 online-mode=false
 level-name=world
 level-type=minecraft:normal`;
-    fs.writeFileSync(SERVER_PROPERTIES_PATH, defaultProps, 'utf8');
+    fs.writeFileSync(setupPropsPath, defaultProps, 'utf8');
     setupSteps.push('Created server.properties');
   }
 
   // Download PaperMC if missing
-  if (!fs.existsSync(path.join(SERVER_DIR, 'server.jar'))) {
+  if (!fs.existsSync(path.join(setupServerDir, 'server.jar'))) {
     try {
       const paperUrl = 'https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds/191/downloads/paper-1.21.4-191.jar';
-      const tempJar = path.join(SERVER_DIR, 'paper-temp.jar');
+      const tempJar = path.join(setupServerDir, 'paper-temp.jar');
       await downloadFile(paperUrl, tempJar);
-      fs.renameSync(tempJar, path.join(SERVER_DIR, 'server.jar'));
+      fs.renameSync(tempJar, path.join(setupServerDir, 'server.jar'));
       setupSteps.push('Downloaded PaperMC server');
     } catch (e) {
       console.error('Failed to download PaperMC:', e.message);
@@ -227,7 +228,7 @@ level-type=minecraft:normal`;
 TOKEN=your-bot-token-here
 GUILD_ID=your-server-id-here
 CLIENT_ID=your-application-id-here
-SERVER_PATH=../server
+SERVER_PATH=C:\\ShadowMCHost\\servers\\default
 SERVER_JAR=server.jar
 JAVA_PATH=java
 RCON_HOST=127.0.0.1
@@ -247,11 +248,12 @@ RCON_PASSWORD=change-this-local-password`;
 /** Update servers.json with correct paths */
 function updateServersConfig() {
   const configPath = paths.serversConfigPath();
+  const defaultServerRoot = paths.getDefaultServerRoot();
   const defaultConfig = {
     servers: {
       default: {
         name: 'Main Server',
-        rootPath: '../server',
+        rootPath: path.join(defaultServerRoot, 'default'),
         botDir: '../mc-bot',
         serverJar: 'server.jar',
         javaPath: null,
@@ -277,8 +279,10 @@ function updateServersConfig() {
   } else {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (!config.servers.default.rootPath.includes('server')) {
-        config.servers.default.rootPath = '../server';
+      const rp = config.servers.default && config.servers.default.rootPath;
+      if (!rp || rp === '../server') {
+        // Migrate legacy relative path to the centralized server root
+        config.servers.default.rootPath = path.join(paths.getDefaultServerRoot(), 'default');
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
       }
     } catch (_) {
@@ -300,11 +304,12 @@ function loadServersConfig() {
   } catch (e) {
     console.error('Error loading servers config:', e.message);
   }
+  const defaultServerRoot = paths.getDefaultServerRoot();
   return {
     servers: {
       default: {
         name: 'Default Server',
-        rootPath: '../server',
+        rootPath: path.join(defaultServerRoot, 'default'),
         botDir: '../mc-bot',
         serverJar: 'server.jar',
         javaPath: null,
@@ -404,7 +409,7 @@ function readConfig() {
   const server = getServerConfig(activeId);
   const serverPropertiesPath = getServerPropertiesPath(activeId);
   const botEnvPath = server && server.botDir
-    ? path.join(path.resolve(__dirname, server.botDir), '.env')
+    ? path.join(path.resolve(paths.getManagerDir(), server.botDir), '.env')
     : BOT_ENV_PATH;
   const result = {
     maxPlayers: 10,
@@ -739,9 +744,10 @@ function scheduleRconConnect(delayMs = 15000) {
     }
 
     // Also check server.properties for RCON settings
-    if (fs.existsSync(SERVER_PROPERTIES_PATH)) {
+    const activePropsPath = getServerPropertiesPath(getActiveServerId());
+    if (fs.existsSync(activePropsPath)) {
       try {
-        const props = parseProperties(fs.readFileSync(SERVER_PROPERTIES_PATH, 'utf8'));
+        const props = parseProperties(fs.readFileSync(activePropsPath, 'utf8'));
         if (!password) password = props['rcon.password'] || '';
         if (port === 25575) port = parseInt(props['rcon.port'] || '25575', 10);
         if (host === '127.0.0.1') host = props['server-ip'] || '127.0.0.1';
@@ -979,6 +985,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Migrate legacy config files from __dirname to userData (safe, one-time)
+  paths.migrateLegacyConfig();
+
   createWindow();
   createTray();
 
@@ -1153,7 +1162,7 @@ ipcMain.handle('check-prerequisites', async () => {
 
 ipcMain.handle('download-papermc', async (_, version = '1.21.4', build) => {
   try {
-    const result = await downloadPaperJar(version, SERVER_DIR, 'server.jar');
+    const result = await downloadPaperJar(version, getServerDirectory(getActiveServerId()), 'server.jar');
     return { success: true, message: 'PaperMC downloaded successfully', ...result };
   } catch (e) {
     return { success: false, error: e.message };
@@ -1204,7 +1213,7 @@ function tryProcessSearch() {
       if (err || !stdout) return resolve(null);
       const lines = stdout.split('\n');
       for (const line of lines) {
-        if (line.includes(SERVER_DIR)) {
+        if (line.includes(getServerDirectory(getActiveServerId()))) {
           // Parse CSV line: "processid","commandline" or just look for numbers
           const parts = line.split(',');
           for (const part of parts) {
@@ -1282,7 +1291,7 @@ ipcMain.handle('get-status', async () => {
   };
 
   // ops.json
-  const opsPath = path.join(SERVER_DIR, 'ops.json');
+  const opsPath = path.join(getServerDirectory(getActiveServerId()), 'ops.json');
   if (fs.existsSync(opsPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(opsPath, 'utf8'));
@@ -1319,8 +1328,9 @@ ipcMain.handle('get-status', async () => {
       status.serverRam = await getPidRamMB(detected.pid);
       // Try to get uptime from log file if PID is recent
       try {
-        if (fs.existsSync(SERVER_LOG_PATH)) {
-          const stat = fs.statSync(SERVER_LOG_PATH);
+        const activeLogPath = getServerLogPath(getActiveServerId());
+        if (fs.existsSync(activeLogPath)) {
+          const stat = fs.statSync(activeLogPath);
           status.serverUptime = Date.now() - stat.mtimeMs;
         }
       } catch (_) {}
@@ -1358,7 +1368,7 @@ async function startServerProcess() {
     const managerSettings = readManagerSettings();
     const config = loadServersConfig();
     const serverConfig = config.servers[config.settings.defaultServer] || config.servers.default;
-    const serverRoot = path.resolve(__dirname, serverConfig.rootPath || '../server');
+    const serverRoot = getServerDirectory(config.settings.defaultServer || 'default');
 
     const child = spawn(javaExe, args, {
       cwd:      serverRoot,
@@ -1544,7 +1554,7 @@ ipcMain.handle('save-settings', (_, settings) => {
     const activeServer = getServerConfig(activeId);
     const serverPropertiesPath = getServerPropertiesPath(activeId);
     const botEnvPath = activeServer && activeServer.botDir
-      ? path.join(path.resolve(__dirname, activeServer.botDir), '.env')
+      ? path.join(path.resolve(paths.getManagerDir(), activeServer.botDir), '.env')
       : BOT_ENV_PATH;
 
     // Save manager settings
@@ -1693,10 +1703,7 @@ function getServerPropertiesPath(serverId) {
 /** Get server directory */
 function getServerDirectory(serverId) {
   const server = getServerConfig(serverId);
-  if (server && server.rootPath) {
-    return path.resolve(__dirname, server.rootPath);
-  }
-  return SERVER_DIR;
+  return paths.getServerDirectory(serverId, server, paths.getManagerDir());
 }
 
 function persistResolvedServerJar(serverId, jarName) {
@@ -2103,12 +2110,9 @@ ipcMain.handle('create-server', async (_, profile) => {
     const config = loadServersConfig();
     const serverId = profile.id || `server-${Date.now()}`;
     const ports = getNextPorts();
-    // Use isolated directory outside the repo
-    const dataRoot = process.platform === 'win32'
-      ? 'C:\\ShadowMCHost'
-      : path.join(require('os').homedir(), '.shadowmchost');
-    const serversBase = path.join(dataRoot, 'servers');
-    const serverDir = path.join(serversBase, serverId);
+    // New servers go under the centralized server root
+    const serversBase = paths.getServerRoot();
+    const serverDir = paths.getNewServerDir(serverId);
     if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
@@ -2396,11 +2400,8 @@ ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => 
     const config = loadServersConfig();
     const id = importServerId || `imported-${Date.now()}`;
     const resolvedSource = path.resolve(sourcePath);
-    const dataRoot = process.platform === 'win32'
-      ? 'C:\\ShadowMCHost'
-      : path.join(require('os').homedir(), '.shadowmchost');
-    const serversBase = path.join(dataRoot, 'servers');
-    const serverDir = path.join(serversBase, id);
+    const serversBase = paths.getServerRoot();
+    const serverDir = paths.getNewServerDir(id);
     if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(resolvedSource)) {
       return { success: false, error: `Source directory not found: ${resolvedSource}` };
@@ -2529,12 +2530,9 @@ ipcMain.handle('create-server-with-download', async (_, profile) => {
     const maxRam = profile.maxRam || '4G';
     const minecraftVersion = profile.minecraftVersion || '1.21.4';
 
-    // Create isolated server directory outside the repo
-    const dataRoot = process.platform === 'win32'
-      ? 'C:\\ShadowMCHost'
-      : path.join(require('os').homedir(), '.shadowmchost');
-    const serversBase = path.join(dataRoot, 'servers');
-    const serverDir = path.join(serversBase, serverId);
+    // New servers go under the centralized server root
+    const serversBase = paths.getServerRoot();
+    const serverDir = paths.getNewServerDir(serverId);
     if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (fs.existsSync(serverDir)) {
       return { success: false, error: 'Server directory already exists. Choose a different name.' };

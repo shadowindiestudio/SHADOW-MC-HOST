@@ -8,8 +8,9 @@ const dns = require('dns');
 const net = require('net');
 const https = require('https');
 
-// Networking state storage path
-const NETWORKING_CONFIG_PATH = path.join(__dirname, 'networking-config.json');
+// Networking state storage path — uses centralized paths module (userData)
+const paths = require('./paths');
+const NETWORKING_CONFIG_PATH = paths.networkingConfigPath();
 
 // Default networking configuration
 const DEFAULT_NETWORKING_CONFIG = {
