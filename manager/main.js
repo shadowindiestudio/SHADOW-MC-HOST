@@ -11,21 +11,34 @@ const os = require('os');
 const dns = require('dns');
 const net = require('net');
 const networking = require('./networking');
+const paths = require('./paths');
 
 // ---------------------------------------------------------------------------
-// Paths (all relative to manager/ dir so the project stays portable)
+// Paths — centralized via paths.js
+// Read-only resources (preload, renderer, tray icon) stay in __dirname.
+// Mutable runtime state (config, PID files, settings) uses app.getPath('userData').
+// Server data lives under a configurable root (default C:\ShadowMCHost\servers).
 // ---------------------------------------------------------------------------
-const SERVER_ROOT = path.resolve(__dirname, '../');
-const BOT_DIR     = path.resolve(__dirname, '../mc-bot');
-const SERVER_DIR   = path.join(SERVER_ROOT, 'server');
-const SERVER_PROPERTIES_PATH = path.join(SERVER_DIR, 'server.properties');
-const BOT_ENV_PATH   = path.join(BOT_DIR,    '.env');
-const START_BAT_PATH = path.join(SERVER_ROOT, 'start.bat');
-const SERVER_PID_PATH = path.join(__dirname, '.server.pid');
-const BOT_PID_PATH    = path.join(__dirname, '.bot.pid');
-const SERVER_LOG_PATH = path.join(SERVER_DIR, 'logs', 'latest.log');
-const BOT_LOG_PATH    = path.join(BOT_DIR,    'bot.log');
-const SETUP_LOCK_PATH = path.join(__dirname, '.setup-complete');
+
+// Read-only application resources (safe in ASAR)
+const BOT_DIR     = paths.getBotDir();
+const BOT_ENV_PATH   = path.join(BOT_DIR, '.env');
+const BOT_LOG_PATH    = path.join(BOT_DIR, 'bot.log');
+const START_BAT_PATH = path.join(paths.getManagerDir(), '..', 'start.bat');
+
+// Mutable application data (writable, under userData)
+const SERVER_PID_PATH = paths.legacyServerPidPath();
+const BOT_PID_PATH    = paths.botPidPath();
+const SETUP_LOCK_PATH = paths.setupLockPath();
+
+// Legacy single-server paths — now resolved dynamically per active server
+const SERVER_DIR   = path.join(paths.getManagerDir(), '..', 'server'); // legacy fallback only
+const SERVER_PROPERTIES_PATH = path.join(SERVER_DIR, 'server.properties'); // legacy fallback
+const SERVER_LOG_PATH = path.join(SERVER_DIR, 'logs', 'latest.log'); // legacy fallback
+
+// Config file paths (writable, under userData)
+const SERVERS_CONFIG_PATH = paths.serversConfigPath();
+const MANAGER_SETTINGS_PATH = paths.managerSettingsPath();
 
 // ---------------------------------------------------------------------------
 // State
@@ -136,7 +149,7 @@ async function checkPrerequisites() {
   checks.serverJar = !!jar.absolutePath;
 
   // Check npm dependencies
-  checks.dependencies = fs.existsSync(path.join(__dirname, 'node_modules')) &&
+  checks.dependencies = fs.existsSync(path.join(paths.getManagerDir(), 'node_modules')) &&
                        fs.existsSync(path.join(BOT_DIR, 'node_modules'));
 
   return checks;
@@ -233,7 +246,7 @@ RCON_PASSWORD=change-this-local-password`;
 
 /** Update servers.json with correct paths */
 function updateServersConfig() {
-  const configPath = path.join(__dirname, 'servers.json');
+  const configPath = paths.serversConfigPath();
   const defaultConfig = {
     servers: {
       default: {
@@ -277,7 +290,7 @@ function updateServersConfig() {
 // ===========================================================================
 // Server Configuration Helpers (Multi-Server Support)
 // ===========================================================================
-const SERVERS_CONFIG_PATH = path.join(__dirname, 'servers.json');
+// SERVERS_CONFIG_PATH now set via paths.js (see above)
 
 function loadServersConfig() {
   try {
@@ -323,7 +336,7 @@ function saveServersConfig(config) {
   }
 }
 
-const MANAGER_SETTINGS_PATH = path.join(__dirname, 'manager-settings.json');
+// MANAGER_SETTINGS_PATH now set via paths.js (see above)
 
 function readManagerSettings() {
   const defaults = {
@@ -904,7 +917,7 @@ async function updateTrayMenu() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'tray-icon.png');
+  const iconPath = paths.getTrayIconPath();
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon);
   tray.setToolTip('Shadow MC Host');
@@ -933,7 +946,7 @@ function createWindow() {
     title: 'Shadow MC Host',
     backgroundColor: '#0D0D0D',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: paths.getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
@@ -941,7 +954,7 @@ function createWindow() {
   });
 
   mainWindow.removeMenu();
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.loadFile(paths.getIndexHtmlPath());
 
   // Intercept close — minimize to tray if setting is on
   mainWindow.on('close', (e) => {
@@ -1664,7 +1677,7 @@ function getNextPorts() {
 
 /** Get PID file path for server */
 function getServerPidPath(serverId) {
-  return path.join(__dirname, `.server-pid-${serverId}`);
+  return paths.serverPidPath(serverId);
 }
 
 /** Get log path for server */
