@@ -984,7 +984,23 @@ function createWindow() {
   activeTailers.push(bt);
 }
 
+// Single-instance lock — must be acquired before normal app initialization (REPO-008)
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  // Second instance — exit immediately without initializing manager/server lifecycle
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return; // safety guard — second instance should have quit
   // Migrate legacy config files from __dirname to userData (safe, one-time)
   paths.migrateLegacyConfig();
 
@@ -1011,33 +1027,15 @@ app.whenReady().then(async () => {
     fs.writeFileSync(SETUP_LOCK_PATH, 'setup completed at ' + new Date().toISOString(), 'utf8');
   }
 
-  // Detect already-running server
-  const savedPid = readPid(SERVER_PID_PATH);
-  if (savedPid) {
-    const running = await isPidRunning(savedPid, 'java.exe');
-    if (running) {
-      console.log(`Detected running server PID ${savedPid} on startup.`);
-      startRamPolling();
-      scheduleRconConnect(2000);
-    } else {
-      // Auto-start if setting is on and server wasn't already running
-      if (managerSettings.autoStartServer) {
-        console.log('[Auto-Start] Starting server...');
-        send('server-log', '[System] Auto-starting Minecraft server...');
-        startServerProcess();
-      }
-    }
-  } else {
-    const detected = await detectServerStatus();
-    if (detected) {
-      console.log(`Auto-detected running server PID ${detected.pid} via ${detected.source}.`);
-      startRamPolling();
-      scheduleRconConnect(2000);
-    } else if (managerSettings.autoStartServer) {
-      console.log('[Auto-Start] Starting server...');
-      send('server-log', '[System] Auto-starting Minecraft server...');
-      startServerProcess();
-    }
+  // Recover already-running servers into the multi-server lifecycle (FOUNDATION-010)
+  const recoveredCount = await recoverRunningServers();
+
+  // Auto-start default server if none were recovered and auto-start is enabled
+  if (recoveredCount === 0 && managerSettings.autoStartServer) {
+    const activeId = getActiveServerId();
+    console.log('[Auto-Start] Starting default server...');
+    send('server-log', '[System] Auto-starting Minecraft server...');
+    startServerById(activeId).catch(e => console.error('[Auto-Start] Failed:', e.message));
   }
 
   // Detect already-running bot
@@ -1059,10 +1057,18 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed', async () => {
   const s = readManagerSettings();
   // If minimize-to-tray is on and this wasn't a forced quit, don't actually quit
   if (s.closeToTray && !forceQuit) return;
+
+  // Stop all tracked multi-server processes (REPO-001 — consolidated from duplicate handler)
+  const serverIds = [...serverProcesses.keys()];
+  for (const serverId of serverIds) {
+    const state = serverProcesses.get(serverId);
+    if (state && state.logTailer) { state.logTailer.stop(); }
+    await stopServerById(serverId).catch(() => {});
+  }
 
   activeTailers.forEach(t => t.stop());
   activeTailers = [];
@@ -1944,7 +1950,10 @@ async function stopServerById(serverId) {
     return { success: false, error: `Server '${serverId}' is not running` };
   }
   const state = serverProcesses.get(serverId);
-  if (state) state.state = 'stopping';
+  if (state) {
+    state.state = 'stopping';
+    if (state.logTailer) { state.logTailer.stop(); state.logTailer = null; }
+  }
   send('status-change', { type: 'server', serverId, state: 'stopping' });
   if (state && state.rcon && state.rconConnected) {
     try { await state.rcon.send('stop'); await new Promise(r => setTimeout(r, 8000)); }
@@ -2080,6 +2089,74 @@ async function getAllServersStatus() {
     if (result.success) results[serverId] = result.status;
   }
   return { success: true, servers: results };
+}
+
+/**
+ * Recover servers that are already running when the manager starts.
+ * Does NOT spawn new processes — only adopts existing Java processes.
+ * Returns the number of servers successfully recovered. (FOUNDATION-010)
+ */
+async function recoverRunningServers() {
+  const config = loadServersConfig();
+  const serverIds = Object.keys(config.servers);
+  let recoveredCount = 0;
+
+  for (const serverId of serverIds) {
+    const server = config.servers[serverId];
+    if (!server) continue;
+
+    const pidPath = getServerPidPath(serverId);
+    const pid = readServerPid(pidPath);
+
+    if (!pid) continue; // no PID file — server was not running or was never started
+
+    const running = await isServerPidRunning(pid, 'java.exe');
+    if (!running) {
+      // Stale PID file — clean up, do not register as running
+      try { fs.unlinkSync(pidPath); } catch (_) {}
+      continue;
+    }
+
+    // Server is genuinely running — adopt it without spawning a new process
+    console.log(`[Recovery] Server '${serverId}' is already running (PID ${pid}). Adopting.`);
+    appendServerLog(serverId, `[System] Detected running server process (PID ${pid}). Reconnecting.`);
+
+    const serverRoot = getServerDirectory(serverId);
+    const serverPort = server.serverPort || 25565;
+    const rconPort = server.rconPort || 25575;
+    const maxRam = server.maxRam || '4G';
+
+    // Register in serverProcesses without a child process handle (adopted process)
+    serverProcesses.set(serverId, {
+      child: null,
+      pid,
+      serverPort,
+      rconPort,
+      rconPassword: server.rconPassword || '',
+      startTime: Date.now(),
+      maxRam,
+      serverRoot,
+      serverJar: server.serverJar || 'server.jar',
+      state: 'online'
+    });
+
+    // Restore RAM monitoring
+    startServerRamPolling(serverId);
+
+    // Restore RCON connection
+    scheduleServerRconConnect(serverId);
+
+    // Restore log streaming via LogTailer (child stdout is not available for adopted processes)
+    const logPath = getServerLogPath(serverId);
+    const tailer = new LogTailer(logPath, 'server-log');
+    tailer.start();
+    serverProcesses.get(serverId).logTailer = tailer;
+
+    send('status-change', { type: 'server', serverId, state: 'online' });
+    recoveredCount++;
+  }
+
+  return recoveredCount;
 }
 
 /** Copy directory recursively */
@@ -2797,11 +2874,5 @@ ipcMain.handle('get-server-connection-address', async (_, serverId, serverPort, 
   }
 });
 
-// Cleanup all servers on app quit (append to existing handler)
-app.on('window-all-closed', () => {
-  const s = readManagerSettings();
-  if (s.closeToTray && !forceQuit) return;
-  const serverIds = [...serverProcesses.keys()];
-  for (const serverId of serverIds) stopServerById(serverId).catch(() => {});
-});
+
 
