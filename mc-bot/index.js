@@ -15,35 +15,114 @@ if (fs.existsSync(botEnvPath)) {
 }
 
 const { Client, GatewayIntentBits } = require("discord.js");
-const { spawn } = require("child_process");
 const { Rcon } = require("rcon-client");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-let configuredServerPath = process.env.SERVER_PATH;
-if (!configuredServerPath || paths.isSourcePath(configuredServerPath)) {
-  configuredServerPath = paths.getServerDirectory("default");
-} else if (!path.isAbsolute(configuredServerPath)) {
-  configuredServerPath = path.resolve(paths.getServerRoot(), configuredServerPath);
+// Load server configuration from SHADOW's multi-server config
+function loadServersConfig() {
+  try {
+    const configPath = paths.serversConfigPath();
+    if (fs.existsSync(configPath)) {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+  } catch (e) {
+    console.error('[BOT] Error loading servers config:', e.message);
+  }
+  return {
+    servers: {
+      default: {
+        name: 'Default Server',
+        rootPath: paths.getNewServerDir('default'),
+        serverJar: 'server.jar',
+        rconHost: '127.0.0.1',
+        rconPort: 25575,
+        rconPassword: ''
+      }
+    },
+    settings: {
+      defaultServer: 'default'
+    }
+  };
 }
-const MC_DIR = path.resolve(configuredServerPath);
-const SERVER_JAR = process.env.SERVER_JAR || "server.jar";
-const JAVA = process.env.JAVA_PATH || "java";
-const SERVER_PROPERTIES = path.join(MC_DIR, "server.properties");
 
-// Store server PID for process tracking
-let serverPID = null;
-let serverProcess = null;
+function getActiveServerId() {
+  const config = loadServersConfig();
+  return config.settings?.defaultServer || 'default';
+}
+
+function getActiveServerConfig() {
+  const config = loadServersConfig();
+  const serverId = getActiveServerId();
+  return config.servers?.[serverId] || config.servers?.default || null;
+}
+
+// Get server directory from SHADOW's path resolution
+function getServerDirectory() {
+  const server = getActiveServerConfig();
+  if (server) {
+    return paths.getServerDirectory(getActiveServerId(), server);
+  }
+  // Fallback to default
+  return paths.getServerDirectory('default');
+}
+
+// Get server properties path
+function getServerPropertiesPath() {
+  return path.join(getServerDirectory(), "server.properties");
+}
 
 // ---------- RCON Helper Functions ----------
 
-let activeRcon = null;
+// Per-command RCON connection - no persistent activeRcon state
+// This connects on-demand for each command, avoiding lifecycle ownership
+async function getRconConnection() {
+  const server = getActiveServerConfig();
+  const properties = readServerProperties();
+  
+  const host = server?.rconHost || properties["server-ip"] || process.env.RCON_HOST || "127.0.0.1";
+  const port = Number(server?.rconPort || properties["rcon.port"] || process.env.RCON_PORT || 25575);
+  const password = server?.rconPassword || properties["rcon.password"] || process.env.RCON_PASSWORD || '';
+
+  if (!password) {
+    console.warn('[RCON] No RCON password configured');
+    return null;
+  }
+
+  const rcon = new Rcon({ host, port, password, timeout: 5000 });
+
+  try {
+    await rcon.connect();
+    return rcon;
+  } catch (err) {
+    console.error('[RCON] Connection failed:', err.message);
+    try { await rcon.end(); } catch (_) {}
+    return null;
+  }
+}
+
+async function executeRconCommand(command) {
+  let rcon = null;
+  try {
+    rcon = await getRconConnection();
+    if (!rcon) return null;
+    return await rcon.send(command);
+  } catch (err) {
+    console.error("[RCON ERROR]", err.message);
+    return null;
+  } finally {
+    if (rcon) {
+      try { await rcon.end(); } catch (_) {}
+    }
+  }
+}
 
 function readServerProperties() {
   try {
-    const content = fs.readFileSync(SERVER_PROPERTIES, "utf8");
+    const serverPropsPath = getServerPropertiesPath();
+    const content = fs.readFileSync(serverPropsPath, "utf8");
     return Object.fromEntries(
       content
         .split(/\r?\n/)
@@ -57,62 +136,40 @@ function readServerProperties() {
         })
     );
   } catch (err) {
-    console.warn(`[CONFIG] Could not read ${SERVER_PROPERTIES}: ${err.message}`);
+    console.warn(`[CONFIG] Could not read server.properties: ${err.message}`);
     return {};
   }
 }
 
-async function getRcon() {
-  if (activeRcon) return activeRcon;
-
-  const properties = readServerProperties();
-  activeRcon = await Rcon.connect({
-    host: properties["server-ip"] || process.env.RCON_HOST || "127.0.0.1",
-    port: Number(properties["rcon.port"] || process.env.RCON_PORT || 25575),
-    password: properties["rcon.password"] || process.env.RCON_PASSWORD,
-  });
-
-  activeRcon.on("end", () => {
-    console.log("[RCON] Connection closed or dropped. Will reconnect automatically.");
-    activeRcon = null;
-  });
-
-  activeRcon.on("error", (err) => {
-    console.error("[RCON] Connection error:", err.message);
-    activeRcon = null;
-  });
-
-  return activeRcon;
-}
-
-async function executeRconCommand(command) {
-  try {
-    const rcon = await getRcon();
-    return await rcon.send(command);
-  } catch (err) {
-    console.error("[RCON ERROR]", err.message);
-    activeRcon = null;
-    return null;
-  }
-}
-
 async function isServerRunning() {
+  // Check via RCON connectivity - this is the only reliable way from the bot
+  let rcon = null;
   try {
-    await getRcon();
-    return true;
+    rcon = await getRconConnection();
+    if (rcon) {
+      // Try a lightweight command to verify server is responsive
+      await rcon.send('seed');
+      return true;
+    }
+    return false;
   } catch (err) {
     return false;
+  } finally {
+    if (rcon) {
+      try { await rcon.end(); } catch (_) {}
+    }
   }
 }
 
 // ---------- DISCORD BOT ----------
 
 client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  console.log(`📁 Minecraft Dir: ${MC_DIR}`);
-  console.log(`📦 Server JAR: ${SERVER_JAR}`);
-  console.log(`☕ Java Path: ${JAVA}`);
-  console.log(`🌐 RCON: ${process.env.RCON_HOST}:${process.env.RCON_PORT}`);
+  console.log(`\u2705 Logged in as ${client.user.tag}`);
+  const serverDir = getServerDirectory();
+  const serverConfig = getActiveServerConfig();
+  console.log(`\ud83d\udcc1 Active Server Directory: ${serverDir}`);
+  console.log(`\ud83c\udf10 RCON: ${serverConfig?.rconHost || '127.0.0.1'}:${serverConfig?.rconPort || 25575}`);
+  console.log(`[ARCHITECTURE] Discord bot is running in SHADOW-bound mode. Server lifecycle is managed by SHADOW MC HOST.`);
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -124,117 +181,33 @@ client.on("interactionCreate", async (interaction) => {
   console.log(`Executed command: /${cmd}`);
 
   // ============ START SERVER ============
+  // Delegated to SHADOW MC HOST manager - bot does NOT spawn Java process
   if (cmd === "startserver") {
-    // Check if already running
-    if (await isServerRunning()) {
-      return interaction.editReply("⚠️ Server is already running!");
-    }
-
-    // Validate environment variables
-    if (!MC_DIR) {
-      return interaction.editReply("❌ MINECRAFT_DIR is not set in .env");
-    }
-
-    if (!SERVER_JAR) {
-      return interaction.editReply(
-        "❌ JAR_PATH or SERVER_JAR is not set in .env"
-      );
-    }
-
-    try {
-      const jarPath = path.resolve(MC_DIR, SERVER_JAR);
-
-      console.log(`[BOT] Starting Minecraft server...`);
-      console.log(`[BOT] JAR Path: ${jarPath}`);
-      console.log(`[BOT] Working Dir: ${MC_DIR}`);
-      console.log(`[BOT] Java: ${JAVA}`);
-
-      // Verify JAR file exists
-      if (!fs.existsSync(jarPath)) {
-        console.error(`[ERROR] JAR not found: ${jarPath}`);
-        return interaction.editReply(
-          `❌ Server JAR not found:\n\`${jarPath}\``
-        );
-      }
-
-      // Spawn the server process with FIXED JVM flag syntax and laptop-friendly memory (2G-4G)
-      serverProcess = spawn(
-        JAVA,
-        [
-          "-Xms2G", "-Xmx4G",
-          "-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MaxGCPauseMillis=200", 
-          "-XX:+UnlockExperimentalVMOptions", "-XX:+DisableExplicitGC", "-XX:G1NewSizePercent=30", 
-          "-XX:G1MaxNewSizePercent=40", "-XX:G1HeapRegionSize=8M", "-XX:G1ReservePercent=20", 
-          "-XX:G1HeapWastePercent=5", "-XX:G1MixedGCCountTarget=4", "-XX:InitiatingHeapOccupancyPercent=15", 
-          "-XX:G1MixedGCLiveThresholdPercent=90", "-XX:G1RSetUpdatingPauseTimePercent=5", 
-          "-XX:SurvivorRatio=32", "-XX:+PerfDisableSharedMem", "-XX:MaxTenuringThreshold=1", 
-          "-Dusing.aikars.flags=https://mcflags.emc.gs", "-Daikars.new.flags=true", 
-          "-jar", jarPath, "nogui"
-        ],
-        {
-          cwd: MC_DIR,
-          detached: true,
-          stdio: ["ignore", "pipe", "pipe"], // Capture output
-        }
-      );
-
-      serverPID = serverProcess.pid;
-
-      // Handle stdout
-      serverProcess.stdout?.on("data", (data) => {
-        const output = data.toString().trim();
-        if (output) {
-          console.log(`[SERVER OUTPUT] ${output}`);
-        }
-      });
-
-      // Handle stderr
-      serverProcess.stderr?.on("data", (data) => {
-        const error = data.toString().trim();
-        if (error) {
-          console.error(`[SERVER ERROR] ${error}`);
-        }
-      });
-
-      // Handle process errors
-      serverProcess.on("error", (err) => {
-        console.error(`[SPAWN ERROR] ${err.message}`);
-        serverPID = null;
-        serverProcess = null;
-      });
-
-      // Handle process close
-      serverProcess.on("close", (code) => {
-        console.log(`[SERVER CLOSED] Exit code: ${code}`);
-        serverPID = null;
-        serverProcess = null;
-      });
-
-      // Detach process so it runs independently
-      serverProcess.unref();
-
-      return interaction.editReply(
-        `🟢 **Server Starting...**\n` +
-        `Process ID: \`${serverPID}\`\n` +
-        `JAR: \`${jarPath}\`\n` +
-        `Heap: 2GB initial, 4GB maximum\n` +
-        `Check console for startup logs (may take 30-60 seconds)`
-      );
-    } catch (err) {
-      console.error("[START ERROR]", err);
-      serverPID = null;
-      serverProcess = null;
-      return interaction.editReply(
-        `❌ Failed to start server:\n\`\`\`${err.message}\`\`\``
-      );
-    }
+    const serverConfig = getActiveServerConfig();
+    const serverDir = getServerDirectory();
+    
+    return interaction.editReply(
+      `\ud83d\udfe2 **Server Management Delegated to SHADOW MC HOST**\n` +
+      `This Discord bot no longer directly manages server lifecycle.\n` +
+      `\n` +
+      `To start the server, use the SHADOW MC HOST application:\n` +
+      `- Open the SHADOW MC HOST manager\n` +
+      `- Click "Start Server" in the dashboard or system tray\n` +
+      `- Or use the auto-start settings in the manager\n` +
+      `\n` +
+      `**Active Server:** ${serverConfig?.name || 'default'}\n` +
+      `**Server Directory:** \`${serverDir}\`\n` +
+      `\n` +
+      `The server must be started through SHADOW MC HOST for proper process management, RAM monitoring, and log tailing.`
+    );
   }
 
   // ============ STOP SERVER ============
+  // Uses RCON - delegated to the running server, not bot-owned lifecycle
   if (cmd === "stopserver") {
-    // Check if server is running
+    // Check if server is running via RCON
     if (!(await isServerRunning())) {
-      return interaction.editReply("❌ Server is not running.");
+      return interaction.editReply("\u274c Server is not running or RCON is not connected.");
     }
 
     try {
@@ -244,20 +217,20 @@ client.on("interactionCreate", async (interaction) => {
 
       if (response !== null) {
         return interaction.editReply(
-          `🛑 **Server Stopping...**\n` +
+          `\ud83d\uded1 **Server Stopping...**\n` +
           `The server will shut down gracefully.\n` +
           `Players will be saved (10-30 seconds)`
         );
       } else {
         return interaction.editReply(
-          "❌ Failed to send stop command via RCON.\n" +
-          "Check RCON settings in `.env`"
+          "\u274c Failed to send stop command via RCON.\n" +
+          "Check RCON settings in SHADOW MC HOST configuration"
         );
       }
     } catch (err) {
       console.error("[STOP ERROR]", err);
       return interaction.editReply(
-        `❌ Failed to stop server:\n\`\`\`${err.message}\`\`\``
+        `\u274c Failed to stop server:\n\`\`\`${err.message}\`\`\``
       );
     }
   }
@@ -266,57 +239,56 @@ client.on("interactionCreate", async (interaction) => {
   if (cmd === "status") {
     try {
       const running = await isServerRunning();
-      const status = running ? "🟢 **ONLINE**" : "🔴 **OFFLINE**";
+      const status = running ? "\ud83d\udfe2 **ONLINE**" : "\ud83d\udd34 **OFFLINE**";
+
+      const serverConfig = getActiveServerConfig();
+      const serverDir = getServerDirectory();
 
       let message = `**Server Status:** ${status}\n`;
-      message += `**JAR:** \`${SERVER_JAR}\`\n`;
-      message += `**Directory:** \`${MC_DIR}\`\n`;
-      message += `**Heap:** 2GB initial, 4GB maximum\n`;
-
-      if (serverPID) {
-        message += `**Process ID:** \`${serverPID}\``;
-      }
+      message += `**Server Name:** ${serverConfig?.name || 'default'}\n`;
+      message += `**Directory:** \`${serverDir}\`\n`;
+      message += `**Managed by:** SHADOW MC HOST\n`;
 
       return interaction.editReply(message);
     } catch (err) {
       console.error("[STATUS ERROR]", err);
-      return interaction.editReply("❌ Failed to check server status.");
+      return interaction.editReply("\u274c Failed to check server status.");
     }
   }
 
   // ============ ONLINE PLAYERS ============
   if (cmd === "players") {
     if (!(await isServerRunning())) {
-      return interaction.editReply("❌ Server is offline.");
+      return interaction.editReply("\u274c Server is offline.");
     }
     try {
       const response = await executeRconCommand("list");
       if (response !== null) {
-        return interaction.editReply(`**Online Players:**\n\`\`\`${response.replace(/§[0-9a-fk-or]/ig, '')}\`\`\``);
+        return interaction.editReply(`**Online Players:**\n\`\`\`${response.replace(/\u00a7[0-9a-fk-or]/ig, '')}\`\`\``);
       } else {
-        return interaction.editReply("❌ Failed to communicate with RCON.");
+        return interaction.editReply("\u274c Failed to communicate with RCON.");
       }
     } catch (err) {
       console.error("[PLAYERS ERROR]", err);
-      return interaction.editReply("❌ Failed to check players.");
+      return interaction.editReply("\u274c Failed to check players.");
     }
   }
 
   // ============ TPS ============
   if (cmd === "tps") {
     if (!(await isServerRunning())) {
-      return interaction.editReply("❌ Server is offline.");
+      return interaction.editReply("\u274c Server is offline.");
     }
     try {
       const response = await executeRconCommand("tps");
       if (response !== null) {
-        return interaction.editReply(`**Server TPS:**\n\`\`\`${response.replace(/§[0-9a-fk-or]/ig, '')}\`\`\``);
+        return interaction.editReply(`**Server TPS:**\n\`\`\`${response.replace(/\u00a7[0-9a-fk-or]/ig, '')}\`\`\``);
       } else {
-        return interaction.editReply("❌ Failed to communicate with RCON.");
+        return interaction.editReply("\u274c Failed to communicate with RCON.");
       }
     } catch (err) {
       console.error("[TPS ERROR]", err);
-      return interaction.editReply("❌ Failed to check TPS.");
+      return interaction.editReply("\u274c Failed to check TPS.");
     }
   }
 });
