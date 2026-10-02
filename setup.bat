@@ -1012,18 +1012,20 @@ set "LNK_WORKDIR=%ROOT%"
 
 powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut($env:LNK_PATH); $s.TargetPath = $env:LNK_TARGET; $s.WorkingDirectory = $env:LNK_WORKDIR; $s.Description = 'Launch Shadow MC Host Manager'; $s.Save()" >nul 2>&1
 
-if exist "%DESKTOP_PATH%\Shadow MC Host.lnk" (
-    call :ColorText 0A "[OK] Desktop shortcut created: Shadow MC Host.lnk"
-) else (
-    :: Fallback: plain .bat launcher on desktop
-    (
-        echo @echo off
-        echo cd /d "%ROOT%"
-        echo cd manager
-        echo start "" "node_modules\.bin\electron.cmd" .
-    ) > "%DESKTOP_PATH%\Shadow MC Host.bat"
-    call :ColorText 0E "Could not create .lnk - created Shadow MC Host.bat on Desktop instead"
-)
+if exist "%DESKTOP_PATH%\Shadow MC Host.lnk" goto SHORTCUT_CREATED
+
+:: Fallback: plain .bat launcher on desktop
+(
+    echo @echo off
+    echo cd /d "%ROOT%"
+    echo cd manager
+    echo start "" "node_modules\.bin\electron.cmd" .
+) > "%DESKTOP_PATH%\Shadow MC Host.bat"
+call :ColorText 0E "Could not create .lnk - created Shadow MC Host.bat on Desktop instead"
+goto :eof
+
+:SHORTCUT_CREATED
+call :ColorText 0A "[OK] Desktop shortcut created: Shadow MC Host.lnk"
 
 goto :eof
 
