@@ -2,12 +2,6 @@
   "mcpServers": {
     "github": {
       "enabled": true
-    },
-    "notion": {
-      "enabled": true
-    },
-    "jira": {
-      "enabled": true
     }
   }
 }
