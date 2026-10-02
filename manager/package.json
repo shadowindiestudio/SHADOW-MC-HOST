@@ -17,8 +17,6 @@
       "preload.js",
       "renderer/**/*",
       "node_modules/**/*",
-      "servers.json",
-      "tray-icon.png",
       "package.json"
     ],
     "directories": {

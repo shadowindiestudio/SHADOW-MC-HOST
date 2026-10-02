@@ -15,9 +15,11 @@ setlocal enableextensions enabledelayedexpansion
 cd /d "%~dp0"
 
 set "ROOT=%~dp0"
-set "SERVER_DIR=%ROOT%server"
 set "MANAGER_DIR=%ROOT%manager"
 set "BOT_DIR=%ROOT%mc-bot"
+set "DATA_ROOT=C:\ShadowMCHost"
+set "SERVER_DIR=%DATA_ROOT%\servers\default"
+set "BOT_ENV_PATH=%APPDATA%\SHADOW MC HOST\bot.env"
 set "JAVA_INSTALL_PATH=C:\Program Files\Zulu\zulu-25"
 set "PAPERMC_URL=https://papermc.io/api/v2/projects/paper/versions/1.21.4/builds/191/downloads/paper-1.21.4-191.jar"
 set "PAPERMC_JAR=paper-1.21.4-191.jar"
@@ -59,6 +61,7 @@ if errorlevel 1 (
     for /f "delims=" %%v in ('node -v') do set "NODE_VERSION=%%v"
     call :ColorText 07 "Version: %NODE_VERSION%"
 )
+call :ResolveServerDir
 echo.
 
 :: ============================================================================
@@ -169,7 +172,7 @@ echo.
 :: STEP 5: Create bot .env file if missing
 :: ============================================================================
 call :ColorText 03 "[5/7] Configuring Discord bot..."
-if not exist "%BOT_DIR%\.env" (
+if not exist "%BOT_ENV_PATH%" (
     call :CreateBotEnv
     call :ColorText 0A ".env file created"
 ) else (
@@ -178,11 +181,10 @@ if not exist "%BOT_DIR%\.env" (
 echo.
 
 :: ============================================================================
-:: STEP 6: Update manager servers.json with correct paths
+:: STEP 6: Server profiles are maintained in Electron userData
 :: ============================================================================
 call :ColorText 03 "[6/7] Configuring server profiles..."
-call :UpdateServersConfig
-call :ColorText 0A "Server profiles configured!"
+call :ColorText 0A "Server profiles will be initialized by the manager."
 echo.
 
 :: ============================================================================
@@ -290,6 +292,12 @@ set "dest=%~2"
 powershell -Command "(New-Object Net.WebClient).DownloadFile('%url%', '%dest%')" >nul 2>&1
 goto :eof
 
+:ResolveServerDir
+set "SERVER_DIR="
+for /f "usebackq delims=" %%D in (`node -e "process.stdout.write(require('./manager/paths').getNewServerDir('default'))" 2^>nul`) do set "SERVER_DIR=%%D"
+if not defined SERVER_DIR set "SERVER_DIR=%DATA_ROOT%\servers\default"
+goto :eof
+
 :CreateDefaultServerProperties
 (
     echo #Minecraft server properties
@@ -322,51 +330,21 @@ goto :eof
 goto :eof
 
 :CreateBotEnv
+if not exist "%APPDATA%\SHADOW MC HOST" mkdir "%APPDATA%\SHADOW MC HOST"
 (
     echo # Discord Bot Configuration
     echo # Get your token from: https://discord.com/developers/applications
     echo TOKEN=your-bot-token-here
     echo GUILD_ID=your-server-id-here
     echo CLIENT_ID=your-application-id-here
-    echo SERVER_PATH=../
+    echo SERVER_PATH=%SERVER_DIR%
     echo SERVER_JAR=server.jar
     echo JAVA_PATH=C:\Program Files\Zulu\zulu-25\bin\java.exe
     echo RCON_HOST=127.0.0.1
     echo RCON_PORT=25575
     echo RCON_PASSWORD=change-this-local-password
-) > "%BOT_DIR%\.env"
+) > "%BOT_ENV_PATH%"
 goto :eof
 
 :UpdateServersConfig
-if not exist "%MANAGER_DIR%\servers.json" (
-    (
-        echo {
-        echo   "servers": {
-        echo     "default": {
-        echo       "name": "Main Server",
-        echo       "rootPath": "..\\server",
-        echo       "botDir": "..\\mc-bot",
-        echo       "serverJar": "server.jar",
-        echo       "javaPath": null,
-        echo       "rconHost": "127.0.0.1",
-        echo       "rconPort": 25575,
-        echo       "rconPassword": "",
-        echo       "autoStart": false,
-        echo       "maxRam": "4G",
-        echo       "notes": "Primary Minecraft server"
-        echo     }
-        echo   },
-        echo   "settings": {
-        echo     "defaultServer": "default",
-        echo     "showTerminal": false,
-        echo     "closeToTray": true,
-        echo     "autoStartDefaultServer": false,
-        echo     "autoStartDefaultBot": false
-        echo   }
-        echo }
-    ) > "%MANAGER_DIR%\servers.json"
-) else (
-    :: Update existing config with correct server path
-    powershell -Command "$json = Get-Content '%MANAGER_DIR%\servers.json' -Raw | ConvertFrom-Json; $json.servers.default.rootPath = '..\server'; $json | ConvertTo-Json -Depth 10 | Out-File '%MANAGER_DIR%\servers.json'" >nul 2>&1
-)
 goto :eof

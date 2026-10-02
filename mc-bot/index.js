@@ -1,17 +1,34 @@
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+const paths = require("../manager/paths");
+const botEnvPath = process.env.SHADOW_MC_HOST_BOT_ENV || paths.botEnvPath();
+
+if (fs.existsSync(botEnvPath)) {
+  require("dotenv").config({ path: botEnvPath });
+} else {
+  const localEnv = path.join(__dirname, ".env");
+  if (fs.existsSync(localEnv)) {
+    require("dotenv").config({ path: localEnv });
+  } else {
+    require("dotenv").config({ path: botEnvPath });
+  }
+}
 
 const { Client, GatewayIntentBits } = require("discord.js");
 const { spawn } = require("child_process");
 const { Rcon } = require("rcon-client");
-const path = require("path");
-const fs = require("fs");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-const SERVER_PATH = process.env.SERVER_PATH || "../";
-const MC_DIR = path.resolve(__dirname, SERVER_PATH);
+let configuredServerPath = process.env.SERVER_PATH;
+if (!configuredServerPath || paths.isSourcePath(configuredServerPath)) {
+  configuredServerPath = paths.getServerDirectory("default");
+} else if (!path.isAbsolute(configuredServerPath)) {
+  configuredServerPath = path.resolve(paths.getServerRoot(), configuredServerPath);
+}
+const MC_DIR = path.resolve(configuredServerPath);
 const SERVER_JAR = process.env.SERVER_JAR || "server.jar";
 const JAVA = process.env.JAVA_PATH || "java";
 const SERVER_PROPERTIES = path.join(MC_DIR, "server.properties");

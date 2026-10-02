@@ -11,12 +11,12 @@ cd /d "%~dp0"
 
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
-set "SERVER_DIR=%ROOT%\server"
 set "MANAGER_DIR=%ROOT%\manager"
 set "BOT_DIR=%ROOT%\mc-bot"
 set "DATA_ROOT=C:\ShadowMCHost"
 set "INSTALL_DIR=%DATA_ROOT%\app"
-set "SERVER_INSTALL_DIR=%DATA_ROOT%\data\servers\Server-1"
+call :ResolveServerDir
+set "BOT_ENV_PATH=%APPDATA%\SHADOW MC HOST\bot.env"
 
 :: Get correct Desktop path (handles OneDrive redirection)
 for /f "usebackq delims=" %%D in (`powershell -NoProfile -Command "[Environment]::GetFolderPath('Desktop')"`) do set "DESKTOP_PATH=%%D"
@@ -947,7 +947,7 @@ if exist "%BOT_DIR%\package.json" (
 )
 
 :: Create .env file if missing
-if not exist "%BOT_DIR%\.env" (
+if not exist "%BOT_ENV_PATH%" (
     call :CreateBotEnv
     call :ColorText 0A ".env file created"
 ) else (
@@ -1232,13 +1232,13 @@ if exist "%ROOT%\launch-shadow.bat" (
 
 :: Runtime data is at DATA_ROOT (C:\ShadowMCHost)
 :: App files are at INSTALL_DIR (C:\ShadowMCHost\app)
-:: Server worlds and data are at C:\ShadowMCHost\data\servers — NEVER deleted
+:: Server worlds and data are at C:\ShadowMCHost\servers — NEVER deleted
 if exist "%INSTALL_DIR%" (
     call :ColorText 07 "Installed app files: %INSTALL_DIR%"
     call :ColorText 07 "To remove app files, manually delete: %INSTALL_DIR%"
 )
 
-call :ColorText 0A "NOTE: Server worlds and data are preserved at: %DATA_ROOT%\data\servers"
+call :ColorText 0A "NOTE: Server worlds and data are preserved at: %DATA_ROOT%\servers"
 call :ColorText 07 "To completely remove all data, manually delete: %DATA_ROOT%"
 
 goto :eof
@@ -1253,6 +1253,13 @@ echo.
 call :ColorText 0A "       SHADOW MC HOST - SETUP MENU            "
 call :ColorText 0A "================================================"
 echo.
+goto :eof
+
+:ResolveServerDir
+set "SERVER_DIR="
+for /f "usebackq delims=" %%D in (`node -e "process.stdout.write(require('./manager/paths').getNewServerDir('default'))" 2^>nul`) do set "SERVER_DIR=%%D"
+if not defined SERVER_DIR set "SERVER_DIR=%DATA_ROOT%\servers\default"
+set "SERVER_INSTALL_DIR=%SERVER_DIR%"
 goto :eof
 
 :ColorText
@@ -1340,19 +1347,20 @@ powershell -Command "$file = '%SERVER_DIR%\server.properties'; $content = Get-Co
 goto :eof
 
 :CreateBotEnv
+if not exist "%APPDATA%\SHADOW MC HOST" mkdir "%APPDATA%\SHADOW MC HOST"
 (
     echo # Discord Bot Configuration
     echo # Get your token from: https://discord.com/developers/applications
     echo TOKEN=your-bot-token-here
     echo GUILD_ID=your-server-id-here
     echo CLIENT_ID=your-application-id-here
-    echo SERVER_PATH=../
+    echo SERVER_PATH=%SERVER_DIR%
     echo SERVER_JAR=server.jar
     echo JAVA_PATH=C:\Program Files\Zulu\zulu-21\bin\java.exe
     echo RCON_HOST=127.0.0.1
     echo RCON_PORT=25575
     echo RCON_PASSWORD=change-this-local-password
-) > "%BOT_DIR%\.env"
+) > "%BOT_ENV_PATH%"
 goto :eof
 
 :: ============================================================================

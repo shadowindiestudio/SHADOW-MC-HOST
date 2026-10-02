@@ -99,37 +99,47 @@ function backupsDir() {
 
 /** servers.json — the server registry */
 function serversConfigPath() {
-  return path.join(getAppDataDir(), 'servers.json');
+  return path.join(appDataDir(), 'servers.json');
 }
 
 /** manager-settings.json — tray/terminal/auto-start preferences */
 function managerSettingsPath() {
-  return path.join(getAppDataDir(), 'manager-settings.json');
+  return path.join(appDataDir(), 'manager-settings.json');
 }
 
 /** networking-config.json — networking method configuration */
 function networkingConfigPath() {
-  return path.join(getAppDataDir(), 'networking-config.json');
+  return path.join(appDataDir(), 'networking-config.json');
 }
 
 /** PID file for a specific server process */
 function serverPidPath(serverId) {
-  return path.join(getAppDataDir(), `.server-pid-${serverId}`);
+  return path.join(appDataDir(), `.server-pid-${serverId}`);
 }
 
 /** Legacy single-server PID file path (kept for cleanup/migration) */
 function legacyServerPidPath() {
-  return path.join(getAppDataDir(), '.server.pid');
+  return path.join(appDataDir(), '.server.pid');
 }
 
 /** Bot PID file */
 function botPidPath() {
-  return path.join(getAppDataDir(), '.bot.pid');
+  return path.join(appDataDir(), '.bot.pid');
 }
 
 /** Auto-setup completion marker */
 function setupLockPath() {
-  return path.join(getAppDataDir(), '.setup-complete');
+  return path.join(appDataDir(), '.setup-complete');
+}
+
+/** Discord bot credentials are application configuration, not bot source. */
+function botEnvPath() {
+  return path.join(appDataDir(), 'bot.env');
+}
+
+/** Discord bot output is application runtime logging. */
+function botLogPath() {
+  return path.join(logsDir(), 'bot.log');
 }
 
 // ---------------------------------------------------------------------------
@@ -160,31 +170,41 @@ function getServerRoot() {
     const configPath = serversConfigPath();
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      if (config.settings && config.settings.serverRoot) {
-        return config.settings.serverRoot;
+      const configuredRoot = config.settings && config.settings.serverRoot;
+      if (configuredRoot && path.isAbsolute(configuredRoot) && !isSourcePath(configuredRoot)) {
+        return configuredRoot;
       }
     }
   } catch (_) {}
   return getDefaultServerRoot();
 }
 
+function isSourcePath(candidate) {
+  const sourceRoot = path.resolve(__dirname, '..');
+  const resolved = path.resolve(candidate);
+  return resolved === sourceRoot || resolved.startsWith(`${sourceRoot}${path.sep}`);
+}
+
 /**
  * Get the directory for a specific server by ID.
- * Uses the server's rootPath if registered (supports both absolute paths
- * for new/imported servers and legacy relative paths).
- *
- * For legacy servers with relative rootPath, resolve against the old
- * __dirname location so they continue to work without migration.
+ * Uses the server's absolute rootPath when registered. Relative legacy paths
+ * are resolved under the external server root, never under the source tree.
  */
-function getServerDirectory(serverId, serverConfig, managerDir) {
+function getServerDirectory(serverId, serverConfig) {
   if (serverConfig && serverConfig.rootPath) {
     if (path.isAbsolute(serverConfig.rootPath)) {
-      return serverConfig.rootPath;
+      if (!isSourcePath(serverConfig.rootPath)) {
+        return serverConfig.rootPath;
+      }
     }
-    // Legacy relative path — resolve against the manager directory
-    // (the original __dirname) so existing servers keep working.
-    const base = managerDir || __dirname;
-    return path.resolve(base, serverConfig.rootPath);
+
+    // Relative paths used to be resolved from manager/, which placed server
+    // data in the source checkout. Keep relative profiles external instead.
+    const root = path.resolve(getServerRoot());
+    const candidate = path.resolve(root, serverConfig.rootPath);
+    if (candidate === root || candidate.startsWith(`${root}${path.sep}`)) {
+      return candidate;
+    }
   }
   // Fallback: construct path under the server root
   return path.join(getServerRoot(), serverId);
@@ -196,6 +216,34 @@ function getServerDirectory(serverId, serverConfig, managerDir) {
  */
 function getNewServerDir(serverId) {
   return path.join(getServerRoot(), serverId);
+}
+
+/** Move legacy relative profile paths into the external server root. */
+function migrateLegacyServerPaths() {
+  const configPath = serversConfigPath();
+  try {
+    if (!fs.existsSync(configPath)) return [];
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (!config.servers || typeof config.servers !== 'object') return [];
+
+    const migrated = [];
+    for (const [serverId, server] of Object.entries(config.servers)) {
+      if (!server || typeof server.rootPath !== 'string') continue;
+      if (path.isAbsolute(server.rootPath) && !isSourcePath(server.rootPath)) continue;
+      const target = getServerDirectory(serverId, server);
+      if (target !== server.rootPath) {
+        server.rootPath = target;
+        migrated.push(serverId);
+      }
+    }
+    if (migrated.length) {
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    }
+    return migrated;
+  } catch (e) {
+    console.error(`[paths] Could not migrate server paths: ${e.message}`);
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +292,7 @@ function getIndexHtmlPath() {
  */
 function migrateFile(fileName) {
   const legacyPath = path.join(__dirname, fileName);
-  const targetPath = path.join(getAppDataDir(), fileName);
+  const targetPath = path.join(appDataDir(), fileName);
   try {
     if (fs.existsSync(legacyPath) && !fs.existsSync(targetPath)) {
       const data = fs.readFileSync(legacyPath);
@@ -276,7 +324,7 @@ function migrateLegacyConfig() {
   const legacyPidFiles = ['.server.pid', '.bot.pid'];
   for (const pidFile of legacyPidFiles) {
     const oldPath = path.join(__dirname, pidFile);
-    const newPath = path.join(getAppDataDir(), pidFile);
+    const newPath = path.join(appDataDir(), pidFile);
     try {
       if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
         fs.copyFileSync(oldPath, newPath);
@@ -291,7 +339,7 @@ function migrateLegacyConfig() {
     for (const entry of entries) {
       if (entry.startsWith('.server-pid-')) {
         const oldPath = path.join(__dirname, entry);
-        const newPath = path.join(getAppDataDir(), entry);
+        const newPath = path.join(appDataDir(), entry);
         if (!fs.existsSync(newPath)) {
           fs.copyFileSync(oldPath, newPath);
           migrated.push(entry);
@@ -314,6 +362,11 @@ function migrateLegacyConfig() {
     console.log(`[paths] Migrated config files to userData: ${migrated.join(', ')}`);
   }
 
+  const migratedServerIds = migrateLegacyServerPaths();
+  if (migratedServerIds.length > 0) {
+    console.log(`[paths] Migrated legacy server paths: ${migratedServerIds.join(', ')}`);
+  }
+
   return migrated;
 }
 
@@ -330,12 +383,15 @@ module.exports = {
   legacyServerPidPath,
   botPidPath,
   setupLockPath,
+  botEnvPath,
+  botLogPath,
 
   // Server data paths
   getDefaultServerRoot,
   getServerRoot,
   getServerDirectory,
   getNewServerDir,
+  migrateLegacyServerPaths,
 
   // Read-only resource paths
   getManagerDir,
@@ -348,4 +404,5 @@ module.exports = {
   // Migration
   migrateLegacyConfig,
   ensureDir,
+  isSourcePath,
 };

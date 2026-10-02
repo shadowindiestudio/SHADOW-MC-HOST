@@ -1,4 +1,18 @@
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+const paths = require("../manager/paths");
+const botEnvPath = process.env.SHADOW_MC_HOST_BOT_ENV || paths.botEnvPath();
+
+if (fs.existsSync(botEnvPath)) {
+  require("dotenv").config({ path: botEnvPath });
+} else {
+  const localEnv = path.join(__dirname, ".env");
+  if (fs.existsSync(localEnv)) {
+    require("dotenv").config({ path: localEnv });
+  } else {
+    require("dotenv").config({ path: botEnvPath });
+  }
+}
 
 const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 

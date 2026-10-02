@@ -22,8 +22,8 @@ const paths = require('./paths');
 
 // Read-only application resources (safe in ASAR)
 const BOT_DIR     = paths.getBotDir();
-const BOT_ENV_PATH   = path.join(BOT_DIR, '.env');
-const BOT_LOG_PATH    = path.join(BOT_DIR, 'bot.log');
+const BOT_ENV_PATH   = paths.botEnvPath();
+const BOT_LOG_PATH    = paths.botLogPath();
 const START_BAT_PATH = path.join(paths.getManagerDir(), '..', 'start.bat');
 
 // Mutable application data (writable, under userData)
@@ -224,11 +224,12 @@ level-type=minecraft:normal`;
 
   // Create .env for bot
   if (!fs.existsSync(BOT_ENV_PATH)) {
+    const defaultServerPath = paths.getNewServerDir('default');
     const envContent = `# Discord Bot Configuration
 TOKEN=your-bot-token-here
 GUILD_ID=your-server-id-here
 CLIENT_ID=your-application-id-here
-SERVER_PATH=C:\\ShadowMCHost\\servers\\default
+SERVER_PATH=${defaultServerPath}
 SERVER_JAR=server.jar
 JAVA_PATH=java
 RCON_HOST=127.0.0.1
@@ -248,12 +249,11 @@ RCON_PASSWORD=change-this-local-password`;
 /** Update servers.json with correct paths */
 function updateServersConfig() {
   const configPath = paths.serversConfigPath();
-  const defaultServerRoot = paths.getDefaultServerRoot();
   const defaultConfig = {
     servers: {
       default: {
         name: 'Main Server',
-        rootPath: path.join(defaultServerRoot, 'default'),
+        rootPath: paths.getNewServerDir('default'),
         botDir: '../mc-bot',
         serverJar: 'server.jar',
         javaPath: null,
@@ -276,18 +276,6 @@ function updateServersConfig() {
 
   if (!fs.existsSync(configPath)) {
     fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
-  } else {
-    try {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const rp = config.servers.default && config.servers.default.rootPath;
-      if (!rp || rp === '../server') {
-        // Migrate legacy relative path to the centralized server root
-        config.servers.default.rootPath = path.join(paths.getDefaultServerRoot(), 'default');
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
-      }
-    } catch (_) {
-      fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf8');
-    }
   }
 }
 
@@ -304,12 +292,11 @@ function loadServersConfig() {
   } catch (e) {
     console.error('Error loading servers config:', e.message);
   }
-  const defaultServerRoot = paths.getDefaultServerRoot();
   return {
     servers: {
       default: {
         name: 'Default Server',
-        rootPath: path.join(defaultServerRoot, 'default'),
+        rootPath: paths.getNewServerDir('default'),
         botDir: '../mc-bot',
         serverJar: 'server.jar',
         javaPath: null,
@@ -408,9 +395,7 @@ function readConfig() {
   const activeId = getActiveServerId();
   const server = getServerConfig(activeId);
   const serverPropertiesPath = getServerPropertiesPath(activeId);
-  const botEnvPath = server && server.botDir
-    ? path.join(path.resolve(paths.getManagerDir(), server.botDir), '.env')
-    : BOT_ENV_PATH;
+  const botEnvPath = BOT_ENV_PATH;
   const result = {
     maxPlayers: 10,
     viewDistance: 10,
@@ -923,23 +908,29 @@ async function updateTrayMenu() {
 }
 
 function createTray() {
-  const iconPath = paths.getTrayIconPath();
-  const icon = nativeImage.createFromPath(iconPath);
-  tray = new Tray(icon);
-  tray.setToolTip('Shadow MC Host');
+  try {
+    const iconPath = paths.getTrayIconPath();
+    if (!fs.existsSync(iconPath)) return;
+    const icon = nativeImage.createFromPath(iconPath);
+    if (!icon || icon.isEmpty()) return;
+    tray = new Tray(icon);
+    tray.setToolTip('Shadow MC Host');
 
-  tray.on('click', () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.focus();
-      } else {
-        mainWindow.show();
+    tray.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.focus();
+        } else {
+          mainWindow.show();
+        }
       }
-    }
-  });
+    });
 
-  updateTrayMenu();
-  setInterval(updateTrayMenu, 5000);
+    updateTrayMenu();
+    setInterval(updateTrayMenu, 5000);
+  } catch (err) {
+    console.warn('[tray] Tray icon not initialized:', err.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -962,11 +953,11 @@ function createWindow() {
   mainWindow.removeMenu();
   mainWindow.loadFile(paths.getIndexHtmlPath());
 
-  // Intercept close — minimize to tray if setting is on
+  // Intercept close — minimize to tray if setting is on and tray is available
   mainWindow.on('close', (e) => {
     if (forceQuit) return; // let it close
     const s = readManagerSettings();
-    if (s.closeToTray) {
+    if (s.closeToTray && tray) {
       e.preventDefault();
       mainWindow.hide();
     }
@@ -1120,7 +1111,10 @@ ipcMain.handle('add-server-profile', (_, profile) => {
   try {
     const config = loadServersConfig();
     const id = profile.id || Object.keys(config.servers).length + 1;
-    config.servers[id] = { ...profile, id };
+    const rootPath = profile.rootPath && path.isAbsolute(profile.rootPath) && !paths.isSourcePath(profile.rootPath)
+      ? profile.rootPath
+      : paths.getNewServerDir(id);
+    config.servers[id] = { ...profile, id, rootPath };
     if (!config.settings.defaultServer) {
       config.settings.defaultServer = id;
     }
@@ -1457,6 +1451,7 @@ async function startBotProcess() {
       detached: true,
       shell:    false,
       stdio:    ['ignore', logFd, logFd],
+      env:      { ...process.env, SHADOW_MC_HOST_BOT_ENV: BOT_ENV_PATH },
       windowsHide: !managerSettings.showTerminal
     });
     fs.closeSync(logFd);
@@ -1559,9 +1554,7 @@ ipcMain.handle('save-settings', (_, settings) => {
     const activeId = getActiveServerId();
     const activeServer = getServerConfig(activeId);
     const serverPropertiesPath = getServerPropertiesPath(activeId);
-    const botEnvPath = activeServer && activeServer.botDir
-      ? path.join(path.resolve(paths.getManagerDir(), activeServer.botDir), '.env')
-      : BOT_ENV_PATH;
+    const botEnvPath = BOT_ENV_PATH;
 
     // Save manager settings
     saveManagerSettings(settings);
@@ -1709,7 +1702,7 @@ function getServerPropertiesPath(serverId) {
 /** Get server directory */
 function getServerDirectory(serverId) {
   const server = getServerConfig(serverId);
-  return paths.getServerDirectory(serverId, server, paths.getManagerDir());
+  return paths.getServerDirectory(serverId, server);
 }
 
 function persistResolvedServerJar(serverId, jarName) {
@@ -2873,6 +2866,3 @@ ipcMain.handle('get-server-connection-address', async (_, serverId, serverPort, 
     return { success: false, error: e.message };
   }
 });
-
-
-

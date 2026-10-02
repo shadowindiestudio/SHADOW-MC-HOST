@@ -872,7 +872,7 @@ function renderServerProfiles() {
         <span class="server-profile-id">${escapeHtml(id)}</span>
       </div>
       <div class="server-profile-meta">
-        <span>\ud83d\udcc1 ${escapeHtml(profile.rootPath || '../server')}</span>
+        <span>\ud83d\udcc1 ${escapeHtml(profile.rootPath || 'External server location')}</span>
         <span>\ud83d\udcbe ${escapeHtml(profile.maxRam || '4G')}</span>
         ${profile.notes ? '<span>\ud83d\udcdd ' + escapeHtml(profile.notes) + '</span>' : ''}
       </div>
@@ -934,7 +934,7 @@ btnAddServer.addEventListener('click', () => {
   addServerModal.classList.add('active');
   newServerId.value = '';
   newServerName.value = '';
-  newServerPath.value = '../server';
+  newServerPath.value = '';
   newServerBotdir.value = '../mc-bot';
   newServerMaxram.value = '4G';
   newServerNotes.value = '';
