@@ -1,0 +1,14 @@
+{
+  "name": "shadow-mc-host-project",
+  "private": true,
+  "workspaces": [
+    "manager",
+    "mc-bot"
+  ],
+  "scripts": {
+    "start": "npm start --workspace=manager",
+    "build": "node -c manager/main.js manager/preload.js manager/paths.js manager/networking.js mc-bot/index.js",
+    "build:win": "npm run build:win --workspace=manager",
+    "package:win": "npm run package:win --workspace=manager"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "SHADOW MC HOST",
+  "description": "Desktop manager for SHADOW MC HOST - Minecraft Server Manager with Discord Bot",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
