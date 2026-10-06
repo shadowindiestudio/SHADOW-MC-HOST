@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('api', {
   getActiveServerId:   ()         => ipcRenderer.invoke('get-active-server-id'),
   setActiveServer:     (serverId) => ipcRenderer.invoke('set-active-server', serverId),
   addServerProfile:    (profile)  => ipcRenderer.invoke('add-server-profile', profile),
+  updateServerProfile: (serverId, updates) => ipcRenderer.invoke('update-server-profile', serverId, updates),
   removeServerProfile: (serverId) => ipcRenderer.invoke('remove-server-profile', serverId),
 
   // Server creation and management
@@ -86,6 +87,11 @@ contextBridge.exposeInMainWorld('api', {
     const fn = (_, line) => cb(line);
     ipcRenderer.on('server-log', fn);
     return () => ipcRenderer.removeListener('server-log', fn);
+  },
+  onActiveServerChanged: (cb) => {
+    const fn = (_, payload) => cb(payload);
+    ipcRenderer.on('active-server-changed', fn);
+    return () => ipcRenderer.removeListener('active-server-changed', fn);
   },
   onBotLog: (cb) => {
     const fn = (_, line) => cb(line);

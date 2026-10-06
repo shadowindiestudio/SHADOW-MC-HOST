@@ -180,6 +180,10 @@ function getServerRoot() {
 }
 
 function isSourcePath(candidate) {
+  if (!candidate || typeof candidate !== 'string') return false;
+  if (process.platform !== 'win32' && (/^[a-zA-Z]:[/\\]/.test(candidate) || candidate.startsWith('\\\\'))) {
+    return false;
+  }
   const sourceRoot = path.resolve(__dirname, '..');
   const resolved = path.resolve(candidate);
   return resolved === sourceRoot || resolved.startsWith(`${sourceRoot}${path.sep}`);
@@ -192,7 +196,8 @@ function isSourcePath(candidate) {
  */
 function getServerDirectory(serverId, serverConfig) {
   if (serverConfig && serverConfig.rootPath) {
-    if (path.isAbsolute(serverConfig.rootPath)) {
+    const isAbs = path.isAbsolute(serverConfig.rootPath) || path.win32.isAbsolute(serverConfig.rootPath);
+    if (isAbs) {
       if (!isSourcePath(serverConfig.rootPath)) {
         return serverConfig.rootPath;
       }

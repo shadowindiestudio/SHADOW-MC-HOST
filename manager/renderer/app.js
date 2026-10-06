@@ -571,10 +571,16 @@ tabBotConsole.addEventListener('click', () => {
 });
 
 // Server log push
-window.api.onServerLog(line => {
-  appendToMiniConsole(line);
-  if (activePanel === 'console' && activeConsoleTab === 'server') {
-    appendToFullConsole(line, autoScrollServer);
+window.api.onServerLog(data => {
+  const line = typeof data === 'object' && data !== null ? data.line : data;
+  const logServerId = typeof data === 'object' && data !== null ? data.serverId : null;
+
+  // Filter logs: only display if the line belongs to active server or is a general system line
+  if (!logServerId || logServerId === activeServerId) {
+    appendToMiniConsole(line);
+    if (activePanel === 'console' && activeConsoleTab === 'server') {
+      appendToFullConsole(line, autoScrollServer);
+    }
   }
 });
 
@@ -904,10 +910,26 @@ async function setActiveServer(serverId) {
       renderServerProfiles();
       // Reload status to reflect the new server
       pollStatus();
+      if (activeConsoleTab === 'server') {
+        loadConsoleHistory();
+      }
     }
   } catch (e) {
     console.error('Failed to set active server:', e);
   }
+}
+
+if (window.api.onActiveServerChanged) {
+  window.api.onActiveServerChanged(({ serverId }) => {
+    if (serverId && serverId !== activeServerId) {
+      activeServerId = serverId;
+      renderServerProfiles();
+      pollStatus();
+      if (activeConsoleTab === 'server') {
+        loadConsoleHistory();
+      }
+    }
+  });
 }
 
 async function removeServerProfile(serverId) {

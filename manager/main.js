@@ -1,6 +1,28 @@
 'use strict';
 
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
+
+// ---------------------------------------------------------------------------
+// Single-Instance Lock (REPO-008)
+// Acquire BEFORE normal application initialization.
+// If the lock cannot be acquired:
+// - this is the second instance
+// - it must NOT initialize manager or server lifecycle
+// - it must exit immediately
+// ---------------------------------------------------------------------------
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 const path = require('path');
 const fs = require('fs');
 const { spawn, exec, execSync } = require('child_process');
@@ -629,9 +651,10 @@ async function sendRconCommand(command) {
 // Log Tailer
 // ---------------------------------------------------------------------------
 class LogTailer {
-  constructor(filePath, channel) {
+  constructor(filePath, channel, serverId = null) {
     this.filePath = filePath;
     this.channel  = channel;
+    this.serverId = serverId;
     this.position = 0;
     this.watcher  = null;
     this.pollId   = null;
@@ -676,7 +699,13 @@ class LogTailer {
       this.position = stat.size;
       const text = buf.toString('utf8');
       for (const line of text.split(/\r?\n/)) {
-        if (line.trim()) send(this.channel, line);
+        if (line.trim()) {
+          if (this.serverId) {
+            send(this.channel, { serverId: this.serverId, line });
+          } else {
+            send(this.channel, line);
+          }
+        }
       }
     } catch (e) {
       console.error(`LogTailer._read error on ${this.filePath}:`, e.message);
@@ -687,6 +716,25 @@ class LogTailer {
     if (this.watcher)  { this.watcher.close();        this.watcher = null; }
     if (this.pollId)   { clearInterval(this.pollId);  this.pollId  = null; }
   }
+}
+
+let activeServerTailer = null;
+
+/**
+ * Switch the active server log tailer dynamically when active server changes. (REPO-004)
+ */
+function switchActiveServerLogTailer(serverId) {
+  if (activeServerTailer) {
+    activeServerTailer.stop();
+    const idx = activeTailers.indexOf(activeServerTailer);
+    if (idx !== -1) activeTailers.splice(idx, 1);
+    activeServerTailer = null;
+  }
+  if (!serverId) return;
+  const logPath = getServerLogPath(serverId);
+  activeServerTailer = new LogTailer(logPath, 'server-log', serverId);
+  activeServerTailer.start();
+  activeTailers.push(activeServerTailer);
 }
 
 /** Read last N lines from a file without loading it entirely */
@@ -965,29 +1013,12 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Start log tailers immediately (they create the files if missing)
-  const st = new LogTailer(getServerLogPath(getActiveServerId()), 'server-log');
-  st.start();
-  activeTailers.push(st);
+  // Start active server log tailer dynamically (switches on active server change)
+  switchActiveServerLogTailer(getActiveServerId());
 
   const bt = new LogTailer(BOT_LOG_PATH, 'bot-log');
   bt.start();
   activeTailers.push(bt);
-}
-
-// Single-instance lock — must be acquired before normal app initialization (REPO-008)
-const gotSingleInstanceLock = app.requestSingleInstanceLock();
-if (!gotSingleInstanceLock) {
-  // Second instance — exit immediately without initializing manager/server lifecycle
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
-    }
-  });
 }
 
 app.whenReady().then(async () => {
@@ -1101,25 +1132,272 @@ ipcMain.handle('set-active-server', (_, serverId) => {
     }
     config.settings.defaultServer = serverId;
     saveServersConfig(config);
+
+    // Switch active server log tailer dynamically (REPO-004)
+    switchActiveServerLogTailer(serverId);
+    send('active-server-changed', { serverId });
+
     return { success: true, serverId };
   } catch (e) {
     return { success: false, error: e.message };
   }
 });
 
+/**
+ * Normalize a server directory path for reliable comparison.
+ * Handles:
+ * - relative vs absolute representation (resolves to absolute)
+ * - / vs \ on Windows
+ * - trailing separators
+ * - case-insensitivity on Windows
+ */
+function normalizeServerPath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') return '';
+  let cleaned = rawPath.trim();
+  const isWinPath = /^[a-zA-Z]:[/\\]/.test(cleaned) || cleaned.startsWith('\\\\');
+  let resolved;
+  if (isWinPath) {
+    resolved = path.win32.normalize(cleaned);
+    if (resolved.length > 3 && (resolved.endsWith('\\') || resolved.endsWith('/'))) {
+      resolved = resolved.replace(/[/\\]+$/, '');
+    }
+    return resolved.toLowerCase();
+  } else {
+    resolved = path.resolve(cleaned);
+    const root = path.parse(resolved).root;
+    if (resolved !== root && resolved.length > 1) {
+      resolved = resolved.replace(/[/\\]+$/, '');
+    }
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  }
+}
+
+/**
+ * Resolve a candidate profile's target server directory.
+ */
+function resolveCandidateServerDir(id, profile) {
+  if (profile && profile.rootPath && typeof profile.rootPath === 'string' && profile.rootPath.trim()) {
+    const raw = profile.rootPath.trim();
+    const isWin = /^[a-zA-Z]:[/\\]/.test(raw) || raw.startsWith('\\\\');
+    const isAbs = isWin ? path.win32.isAbsolute(raw) : path.isAbsolute(raw);
+    if (isAbs && !paths.isSourcePath(raw)) {
+      return isWin ? path.win32.normalize(raw) : path.resolve(raw);
+    }
+    return paths.getServerDirectory(id, { rootPath: raw });
+  }
+  return paths.getNewServerDir(id);
+}
+
+/**
+ * Validates that a server profile's rootPath, serverPort, and rconPort
+ * do not collide with any other configured server in the registry.
+ *
+ * @param {Object} profile - Profile candidate data
+ * @param {string} targetServerId - ID of profile being added/updated
+ * @param {Object} config - Current servers configuration
+ * @returns {{ valid: boolean, error?: string, resolvedPath: string, serverPort: number, rconPort: number }}
+ */
+function validateServerProfile(profile, targetServerId, config) {
+  const id = String(targetServerId || (profile && profile.id) || '').trim();
+  if (!id) {
+    return { valid: false, error: 'Server profile ID is required' };
+  }
+
+  // 1. Resolve candidate rootPath
+  const resolvedPath = resolveCandidateServerDir(id, profile);
+  const normCandidatePath = normalizeServerPath(resolvedPath);
+
+  // 2. Collect used paths and ports from other configured servers (excluding self)
+  const otherServers = Object.entries((config && config.servers) || {})
+    .filter(([existingId]) => String(existingId) !== id);
+
+  for (const [existingId, existingServer] of otherServers) {
+    if (!existingServer) continue;
+    const existingDir = resolveCandidateServerDir(existingId, existingServer);
+    const normExistingPath = normalizeServerPath(existingDir);
+    if (normCandidatePath === normExistingPath) {
+      const serverName = existingServer.name || existingId;
+      return {
+        valid: false,
+        error: `Server directory '${resolvedPath}' is already used by server '${serverName}'`
+      };
+    }
+  }
+
+  // 3. Port uniqueness check
+  const usedServerPorts = new Map();
+  const usedRconPorts = new Map();
+
+  for (const [existingId, existingServer] of otherServers) {
+    if (!existingServer) continue;
+    const sName = existingServer.name || existingId;
+    if (existingServer.serverPort) {
+      const sp = parseInt(existingServer.serverPort, 10);
+      if (!isNaN(sp) && sp > 0) usedServerPorts.set(sp, sName);
+    }
+    if (existingServer.rconPort) {
+      const rp = parseInt(existingServer.rconPort, 10);
+      if (!isNaN(rp) && rp > 0) usedRconPorts.set(rp, sName);
+    }
+  }
+
+  // 4. Resolve & validate serverPort
+  let finalServerPort;
+  if (profile && profile.serverPort !== undefined && profile.serverPort !== null && String(profile.serverPort).trim() !== '') {
+    const reqPort = parseInt(profile.serverPort, 10);
+    if (isNaN(reqPort) || reqPort < 1 || reqPort > 65535) {
+      return { valid: false, error: `Invalid server port '${profile.serverPort}'. Port must be between 1 and 65535.` };
+    }
+    if (usedServerPorts.has(reqPort)) {
+      return {
+        valid: false,
+        error: `Minecraft server port ${reqPort} is already in use by server '${usedServerPorts.get(reqPort)}'`
+      };
+    }
+    if (usedRconPorts.has(reqPort)) {
+      return {
+        valid: false,
+        error: `Minecraft server port ${reqPort} conflicts with the RCON port of server '${usedRconPorts.get(reqPort)}'`
+      };
+    }
+    finalServerPort = reqPort;
+  } else {
+    // Auto-allocate collision-free server port
+    let sp = 25565;
+    while (usedServerPorts.has(sp) || usedRconPorts.has(sp)) {
+      sp++;
+    }
+    finalServerPort = sp;
+  }
+
+  // 5. Resolve & validate rconPort
+  let finalRconPort;
+  if (profile && profile.rconPort !== undefined && profile.rconPort !== null && String(profile.rconPort).trim() !== '') {
+    const reqRcon = parseInt(profile.rconPort, 10);
+    if (isNaN(reqRcon) || reqRcon < 1 || reqRcon > 65535) {
+      return { valid: false, error: `Invalid RCON port '${profile.rconPort}'. Port must be between 1 and 65535.` };
+    }
+    if (reqRcon === finalServerPort) {
+      return {
+        valid: false,
+        error: `RCON port (${reqRcon}) cannot be the same as the Minecraft server port (${finalServerPort})`
+      };
+    }
+    if (usedRconPorts.has(reqRcon)) {
+      return {
+        valid: false,
+        error: `RCON port ${reqRcon} is already in use by server '${usedRconPorts.get(reqRcon)}'`
+      };
+    }
+    if (usedServerPorts.has(reqRcon)) {
+      return {
+        valid: false,
+        error: `RCON port ${reqRcon} conflicts with the Minecraft server port of server '${usedServerPorts.get(reqRcon)}'`
+      };
+    }
+    finalRconPort = reqRcon;
+  } else {
+    // Auto-allocate collision-free RCON port
+    let rp = finalServerPort + 100;
+    while (usedRconPorts.has(rp) || usedServerPorts.has(rp) || rp === finalServerPort) {
+      rp++;
+    }
+    finalRconPort = rp;
+  }
+
+  return {
+    valid: true,
+    resolvedPath,
+    serverPort: finalServerPort,
+    rconPort: finalRconPort
+  };
+}
+
 ipcMain.handle('add-server-profile', (_, profile) => {
   try {
+    if (!profile || typeof profile !== 'object') {
+      return { success: false, error: 'Invalid profile data provided' };
+    }
     const config = loadServersConfig();
-    const id = profile.id || Object.keys(config.servers).length + 1;
-    const rootPath = profile.rootPath && path.isAbsolute(profile.rootPath) && !paths.isSourcePath(profile.rootPath)
-      ? profile.rootPath
-      : paths.getNewServerDir(id);
-    config.servers[id] = { ...profile, id, rootPath };
+    const id = String(profile.id || '').trim() || `server-${Date.now()}`;
+
+    // Validate path and ports for uniqueness (rejects duplicate rootPath or ports)
+    const validation = validateServerProfile(profile, id, config);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const rootPath = validation.resolvedPath;
+    const serverPort = validation.serverPort;
+    const rconPort = validation.rconPort;
+    const rconPassword = profile.rconPassword || generateRandomPassword();
+
+    if (!fs.existsSync(rootPath)) {
+      fs.mkdirSync(rootPath, { recursive: true });
+    }
+
+    // Keep server.properties consistent if it exists
+    const propsPath = path.join(rootPath, 'server.properties');
+    if (fs.existsSync(propsPath)) {
+      updatePropertiesFile(propsPath, {
+        'server-port': serverPort,
+        'enable-rcon': 'true',
+        'rcon.port': rconPort
+      });
+    }
+
+    const savedProfile = {
+      ...profile,
+      id,
+      name: profile.name || id,
+      rootPath,
+      serverPort,
+      rconHost: profile.rconHost || '127.0.0.1',
+      rconPort,
+      rconPassword
+    };
+
+    config.servers[id] = savedProfile;
     if (!config.settings.defaultServer) {
       config.settings.defaultServer = id;
     }
     saveServersConfig(config);
-    return { success: true, profile: config.servers[id] };
+    return { success: true, profile: savedProfile };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('update-server-profile', (_, serverId, updates) => {
+  try {
+    const config = loadServersConfig();
+    if (!config.servers || !config.servers[serverId]) {
+      return { success: false, error: `Server profile '${serverId}' not found` };
+    }
+
+    const merged = { ...config.servers[serverId], ...updates, id: serverId };
+    const validation = validateServerProfile(merged, serverId, config);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    merged.rootPath = validation.resolvedPath;
+    merged.serverPort = validation.serverPort;
+    merged.rconPort = validation.rconPort;
+
+    // Keep server.properties consistent if it exists
+    const propsPath = path.join(merged.rootPath, 'server.properties');
+    if (fs.existsSync(propsPath)) {
+      updatePropertiesFile(propsPath, {
+        'server-port': merged.serverPort,
+        'enable-rcon': 'true',
+        'rcon.port': merged.rconPort
+      });
+    }
+
+    config.servers[serverId] = merged;
+    saveServersConfig(config);
+    return { success: true, profile: merged };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -1723,7 +2001,8 @@ function appendServerLog(serverId, line) {
   } catch (e) {
     console.error(`Could not write server log for ${serverId}:`, e.message);
   }
-  send('server-log', line.replace(/\r?\n$/, ''));
+  const cleanLine = line.replace(/\r?\n$/, '');
+  send('server-log', { serverId, line: cleanLine });
 }
 
 function attachProcessOutput(child, serverId) {
@@ -1835,8 +2114,16 @@ async function startServerById(serverId) {
   const server = getServerConfig(serverId);
   if (!server) return { success: false, error: `Server profile '${serverId}' not found` };
 
+  const inMemory = serverProcesses.get(serverId);
+  if (inMemory && (inMemory.state === 'online' || inMemory.state === 'starting')) {
+    return { success: false, error: `Server '${serverId}' is already running` };
+  }
+
   const pidPath = getServerPidPath(serverId);
-  const existingPid = readServerPid(pidPath);
+  let existingPid = readServerPid(pidPath);
+  if (!existingPid && serverId === 'default') {
+    existingPid = readServerPid(paths.legacyServerPidPath());
+  }
   if (existingPid && await isServerPidRunning(existingPid, 'java.exe')) {
     return { success: false, error: `Server '${serverId}' is already running` };
   }
@@ -2091,7 +2378,7 @@ async function getAllServersStatus() {
  */
 async function recoverRunningServers() {
   const config = loadServersConfig();
-  const serverIds = Object.keys(config.servers);
+  const serverIds = Object.keys((config && config.servers) || {});
   let recoveredCount = 0;
 
   for (const serverId of serverIds) {
@@ -2099,7 +2386,23 @@ async function recoverRunningServers() {
     if (!server) continue;
 
     const pidPath = getServerPidPath(serverId);
-    const pid = readServerPid(pidPath);
+    let pid = readServerPid(pidPath);
+
+    // If no server-specific PID file, check legacy PID for default server
+    if (!pid && serverId === 'default') {
+      const legacyPidPath = paths.legacyServerPidPath();
+      const legacyPid = readServerPid(legacyPidPath);
+      if (legacyPid) {
+        const running = await isServerPidRunning(legacyPid, 'java.exe');
+        if (running) {
+          pid = legacyPid;
+          try { fs.writeFileSync(pidPath, String(pid), 'utf8'); } catch (_) {}
+          try { fs.unlinkSync(legacyPidPath); } catch (_) {}
+        } else {
+          try { fs.unlinkSync(legacyPidPath); } catch (_) {}
+        }
+      }
+    }
 
     if (!pid) continue; // no PID file — server was not running or was never started
 
@@ -2140,10 +2443,14 @@ async function recoverRunningServers() {
     scheduleServerRconConnect(serverId);
 
     // Restore log streaming via LogTailer (child stdout is not available for adopted processes)
-    const logPath = getServerLogPath(serverId);
-    const tailer = new LogTailer(logPath, 'server-log');
-    tailer.start();
-    serverProcesses.get(serverId).logTailer = tailer;
+    // If activeServerTailer is already streaming this server, avoid duplicate streaming
+    if (serverId !== getActiveServerId()) {
+      const logPath = getServerLogPath(serverId);
+      const tailer = new LogTailer(logPath, 'server-log', serverId);
+      tailer.start();
+      activeTailers.push(tailer);
+      serverProcesses.get(serverId).logTailer = tailer;
+    }
 
     send('status-change', { type: 'server', serverId, state: 'online' });
     recoveredCount++;
@@ -2152,15 +2459,33 @@ async function recoverRunningServers() {
   return recoveredCount;
 }
 
+/** Filter out SHADOW runtime state and version control metadata when importing */
+function shouldImportServerEntry(name, isDirectory) {
+  // Exclude SHADOW runtime PID files and locks
+  if (name.startsWith('.server-pid-') || name === '.server.pid' || name === '.bot.pid' || name === '.setup-complete') {
+    return false;
+  }
+  // Exclude SHADOW application configs if present in source
+  if (name === 'servers.json' || name === 'manager-settings.json' || name === 'networking-config.json' || name === 'bot.env') {
+    return false;
+  }
+  // Exclude VCS and node_modules
+  if (name === '.git' || name === '.svn' || name === '.hg' || (isDirectory && name === 'node_modules')) {
+    return false;
+  }
+  return true;
+}
+
 /** Copy directory recursively */
-function copyDirRecursive(src, dest) {
+function copyDirRecursive(src, dest, filterFn = null) {
   if (!fs.existsSync(src)) return;
   if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
+    if (filterFn && !filterFn(entry.name, entry.isDirectory())) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
-    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath);
+    if (entry.isDirectory()) copyDirRecursive(srcPath, destPath, filterFn);
     else fs.copyFileSync(srcPath, destPath);
   }
 }
@@ -2178,11 +2503,22 @@ ipcMain.handle('send-rcon-command', (_, serverId, command) => sendRconCommandToS
 ipcMain.handle('create-server', async (_, profile) => {
   try {
     const config = loadServersConfig();
-    const serverId = profile.id || `server-${Date.now()}`;
-    const ports = getNextPorts();
+    const serverId = (profile && profile.id) || `server-${Date.now()}`;
+    if (config.servers && config.servers[serverId]) {
+      return { success: false, error: `Server ID '${serverId}' already exists` };
+    }
+
+    const validation = validateServerProfile(profile || {}, serverId, config);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const serverDir = validation.resolvedPath;
+    const serverPort = validation.serverPort;
+    const rconPort = validation.rconPort;
+
     // New servers go under the centralized server root
     const serversBase = paths.getServerRoot();
-    const serverDir = paths.getNewServerDir(serverId);
     if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(serverDir)) {
       fs.mkdirSync(serverDir, { recursive: true });
@@ -2190,25 +2526,25 @@ ipcMain.handle('create-server', async (_, profile) => {
       fs.mkdirSync(path.join(serverDir, 'world'), { recursive: true });
       fs.mkdirSync(path.join(serverDir, 'logs'), { recursive: true });
     }
-    const seed = profile.seed || generateRandomSeed();
-    const rconPassword = profile.rconPassword || generateRandomPassword();
+    const seed = (profile && profile.seed) || generateRandomSeed();
+    const rconPassword = (profile && profile.rconPassword) || generateRandomPassword();
     const serverProfile = {
-      id: serverId, name: profile.name || serverId,
+      id: serverId, name: (profile && profile.name) || serverId,
       rootPath: serverDir, serverJar: 'server.jar', javaPath: null,
-      serverPort: ports.serverPort, rconHost: '127.0.0.1',
-      rconPort: ports.rconPort, rconPassword: rconPassword,
-      autoStart: profile.autoStart || false, maxRam: profile.maxRam || '4G',
-      notes: profile.notes || '', minecraftVersion: profile.minecraftVersion || '1.21.4',
-      seed: seed, gamemode: profile.gamemode || 'survival',
-      difficulty: profile.difficulty || 'normal', maxPlayers: profile.maxPlayers || 20,
-      viewDistance: profile.viewDistance || 10, levelName: profile.levelName || 'world',
+      serverPort, rconHost: '127.0.0.1',
+      rconPort, rconPassword,
+      autoStart: (profile && profile.autoStart) || false, maxRam: (profile && profile.maxRam) || '4G',
+      notes: (profile && profile.notes) || '', minecraftVersion: (profile && profile.minecraftVersion) || '1.21.4',
+      seed, gamemode: (profile && profile.gamemode) || 'survival',
+      difficulty: (profile && profile.difficulty) || 'normal', maxPlayers: (profile && profile.maxPlayers) || 20,
+      viewDistance: (profile && profile.viewDistance) || 10, levelName: (profile && profile.levelName) || 'world',
       createdAt: new Date().toISOString()
     };
     config.servers[serverId] = serverProfile;
     if (!config.settings.defaultServer) config.settings.defaultServer = serverId;
     saveServersConfig(config);
     const props = {
-      'server-port': ports.serverPort, 'enable-rcon': 'true', 'rcon.port': ports.rconPort,
+      'server-port': serverPort, 'enable-rcon': 'true', 'rcon.port': rconPort,
       'rcon.password': rconPassword, 'gamemode': serverProfile.gamemode,
       'difficulty': serverProfile.difficulty, 'max-players': serverProfile.maxPlayers,
       'view-distance': serverProfile.viewDistance, 'motd': `Shadow MC Host - ${serverProfile.name}`,
@@ -2472,74 +2808,123 @@ ipcMain.handle('import-server', async (_, sourcePath, importServerId = null) => 
     const resolvedSource = path.resolve(sourcePath);
     const serversBase = paths.getServerRoot();
     const serverDir = paths.getNewServerDir(id);
-    if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
+
     if (!fs.existsSync(resolvedSource)) {
       return { success: false, error: `Source directory not found: ${resolvedSource}` };
     }
-    const ports = getNextPorts();
-    let serverProps = {};
-    const propsPath = path.join(resolvedSource, 'server.properties');
-    if (fs.existsSync(propsPath)) {
-      const content = fs.readFileSync(propsPath, 'utf8');
-      for (const line of content.split(/\r?\n/)) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const idx = trimmed.indexOf('=');
-        if (idx > 0) serverProps[trimmed.slice(0, idx).trim()] = trimmed.slice(idx + 1).trim();
-      }
+    if (!fs.statSync(resolvedSource).isDirectory()) {
+      return { success: false, error: `Source path is not a directory: ${resolvedSource}` };
     }
-    const rconPassword = serverProps['rcon.password'] || generateRandomPassword();
-    const seed = serverProps['level-seed'] || generateRandomSeed();
-    const serverProfile = {
-      id: id, name: path.basename(resolvedSource) || id, rootPath: serverDir,
-      serverJar: 'server.jar', javaPath: null,
-      serverPort: parseInt(serverProps['server-port']) || ports.serverPort,
-      rconHost: '127.0.0.1', rconPort: parseInt(serverProps['rcon.port']) || ports.rconPort,
-      rconPassword: rconPassword, autoStart: false, maxRam: '4G',
-      notes: `Imported from: ${sourcePath}`, minecraftVersion: '1.21.4',
-      seed: seed, gamemode: serverProps['gamemode'] || 'survival',
-      difficulty: serverProps['difficulty'] || 'normal',
-      maxPlayers: parseInt(serverProps['max-players']) || 20,
-      viewDistance: parseInt(serverProps['view-distance']) || 10,
-      levelName: serverProps['level-name'] || 'world', createdAt: new Date().toISOString()
-    };
-    config.servers[id] = serverProfile; saveServersConfig(config);
+    if (config.servers && config.servers[id]) {
+      return { success: false, error: `A server profile with ID '${id}' already exists.` };
+    }
+    if (path.resolve(serverDir) === resolvedSource) {
+      return { success: false, error: 'Destination directory is the same as the source directory.' };
+    }
+
+    if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
     if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true });
-    // Detect server JARs in source directory instead of assuming server.jar
-    const detectedJars = detectServerJars(resolvedSource);
+
+    // FOUNDATION-004: Copy entire server directory preserving worlds, player data, plugins, configs
+    copyDirRecursive(resolvedSource, serverDir, shouldImportServerEntry);
+
+    // Detect server JARs in the imported destination directory
+    const detectedJars = detectServerJars(serverDir);
     let serverJarName = 'server.jar';
+    let jarNote = '';
     if (detectedJars.length === 1) {
       serverJarName = detectedJars[0].name;
     } else if (detectedJars.length > 1) {
-      // Pick the largest (most likely server) but note it in the profile
       serverJarName = detectedJars[0].name;
-      serverProfile.notes += ` (Multiple JARs detected, using: ${serverJarName})`;
+      jarNote = ` (Multiple JARs detected, using: ${serverJarName})`;
+    } else if (!fs.existsSync(path.join(serverDir, 'server.jar'))) {
+      jarNote = ' (No server JAR detected; add server.jar before starting)';
     }
-    serverProfile.serverJar = serverJarName;
+
+    // FOUNDATION-005: Parse existing server.properties to preserve all settings
+    const targetPropsPath = path.join(serverDir, 'server.properties');
+    let serverProps = {};
+    if (fs.existsSync(targetPropsPath)) {
+      try {
+        serverProps = parseProperties(fs.readFileSync(targetPropsPath, 'utf8'));
+      } catch (_) {}
+    }
+
+    // Allocate ports, checking against collision with other configured servers
+    const ports = getNextPorts();
+    const usedPorts = new Set();
+    const usedRconPorts = new Set();
+    for (const [srvId, srv] of Object.entries(config.servers || {})) {
+      if (srvId !== id) {
+        if (srv.serverPort) usedPorts.add(Number(srv.serverPort));
+        if (srv.rconPort) usedRconPorts.add(Number(srv.rconPort));
+      }
+    }
+
+    const existingServerPort = parseInt(serverProps['server-port'], 10);
+    const existingRconPort = parseInt(serverProps['rcon.port'], 10);
+
+    const finalServerPort = (!isNaN(existingServerPort) && existingServerPort > 0 && !usedPorts.has(existingServerPort))
+      ? existingServerPort
+      : ports.serverPort;
+
+    const finalRconPort = (!isNaN(existingRconPort) && existingRconPort > 0 && !usedRconPorts.has(existingRconPort) && existingRconPort !== finalServerPort)
+      ? existingRconPort
+      : ports.rconPort;
+
+    const finalRconPassword = (serverProps['rcon.password'] && serverProps['rcon.password'].trim())
+      ? serverProps['rcon.password'].trim()
+      : generateRandomPassword();
+
+    // FOUNDATION-005: Update ONLY required SHADOW-controlled keys in-place
+    // Preserves MOTD, gamemode, difficulty, view-distance, online-mode, whitelist, etc.
+    const requiredUpdates = {
+      'server-port': finalServerPort,
+      'enable-rcon': 'true',
+      'rcon.port': finalRconPort,
+      'rcon.password': finalRconPassword
+    };
+    updatePropertiesFile(targetPropsPath, requiredUpdates);
+
+    // Ensure eula.txt exists so imported server can boot
+    const eulaPath = path.join(serverDir, 'eula.txt');
+    if (!fs.existsSync(eulaPath)) {
+      fs.writeFileSync(eulaPath, 'eula=true\r\n', 'utf8');
+    }
+
+    const serverProfile = {
+      id: id,
+      name: path.basename(resolvedSource) || id,
+      rootPath: serverDir,
+      serverJar: serverJarName,
+      javaPath: null,
+      serverPort: finalServerPort,
+      rconHost: '127.0.0.1',
+      rconPort: finalRconPort,
+      rconPassword: finalRconPassword,
+      autoStart: false,
+      maxRam: '4G',
+      notes: `Imported from: ${sourcePath}${jarNote}`,
+      minecraftVersion: '1.21.4',
+      seed: serverProps['level-seed'] || generateRandomSeed(),
+      gamemode: serverProps['gamemode'] || 'survival',
+      difficulty: serverProps['difficulty'] || 'normal',
+      maxPlayers: parseInt(serverProps['max-players'], 10) || 20,
+      viewDistance: parseInt(serverProps['view-distance'], 10) || 10,
+      levelName: serverProps['level-name'] || 'world',
+      createdAt: new Date().toISOString()
+    };
+
+    config.servers[id] = serverProfile;
+    if (!config.settings.defaultServer || Object.keys(config.servers).length === 1) {
+      config.settings.defaultServer = id;
+    }
     saveServersConfig(config);
 
-    const filesToCopy = ['server.properties', 'eula.txt', 'bukkit.yml', 'spigot.yml', 'paper.yml'];
-    for (const file of filesToCopy) {
-      const src = path.join(resolvedSource, file);
-      const dest = path.join(serverDir, file);
-      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
-    }
-    // Copy the detected server JAR
-    const srcJar = path.join(resolvedSource, serverJarName);
-    if (fs.existsSync(srcJar)) {
-      fs.copyFileSync(srcJar, path.join(serverDir, serverJarName));
-    }
-    const pluginsSrc = path.join(resolvedSource, 'plugins');
-    const pluginsDest = path.join(serverDir, 'plugins');
-    if (fs.existsSync(pluginsSrc)) copyDirRecursive(pluginsSrc, pluginsDest);
-    const props = {
-      'server-port': serverProfile.serverPort, 'enable-rcon': 'true',
-      'rcon.port': serverProfile.rconPort, 'rcon.password': rconPassword, 'level-seed': seed
-    };
-    fs.writeFileSync(path.join(serverDir, 'server.properties'),
-      Object.entries(props).map(([k, v]) => `${k}=${v}`).join('\n'), 'utf8');
     return { success: true, profile: serverProfile };
-  } catch (e) { return { success: false, error: e.message }; }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
 
 // ===========================================================================
@@ -2590,24 +2975,29 @@ ipcMain.handle('set-server-jar', (_, serverId, jarName) => {
 ipcMain.handle('create-server-with-download', async (_, profile) => {
   try {
     const config = loadServersConfig();
-    const serverId = profile.id || `server-${Date.now()}`;
-    if (config.servers[serverId]) return { success: false, error: 'Server ID already exists' };
-    const ports = getNextPorts();
-    const serverPort = profile.serverPort || ports.serverPort;
-    const rconPort = profile.rconPort || ports.rconPort;
-    const rconPassword = profile.rconPassword || generateRandomPassword();
-    const seed = profile.seed && profile.seed.trim() ? profile.seed.trim() : generateRandomSeed();
-    const maxRam = profile.maxRam || '4G';
-    const minecraftVersion = profile.minecraftVersion || '1.21.4';
+    const serverId = (profile && profile.id) || `server-${Date.now()}`;
+    if (config.servers && config.servers[serverId]) return { success: false, error: 'Server ID already exists' };
+
+    const validation = validateServerProfile(profile || {}, serverId, config);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+
+    const serverPort = validation.serverPort;
+    const rconPort = validation.rconPort;
+    const rconPassword = (profile && profile.rconPassword) || generateRandomPassword();
+    const seed = profile && profile.seed && profile.seed.trim() ? profile.seed.trim() : generateRandomSeed();
+    const maxRam = (profile && profile.maxRam) || '4G';
+    const minecraftVersion = (profile && profile.minecraftVersion) || '1.21.4';
 
     // New servers go under the centralized server root
     const serversBase = paths.getServerRoot();
-    const serverDir = paths.getNewServerDir(serverId);
+    const serverDir = validation.resolvedPath;
     if (!fs.existsSync(serversBase)) fs.mkdirSync(serversBase, { recursive: true });
-    if (fs.existsSync(serverDir)) {
-      return { success: false, error: 'Server directory already exists. Choose a different name.' };
+    if (fs.existsSync(serverDir) && fs.readdirSync(serverDir).length > 0) {
+      return { success: false, error: 'Server directory already exists and is not empty. Choose a different name or path.' };
     }
-    fs.mkdirSync(serverDir, { recursive: true });
+    if (!fs.existsSync(serverDir)) fs.mkdirSync(serverDir, { recursive: true });
     fs.mkdirSync(path.join(serverDir, 'plugins'), { recursive: true });
     fs.mkdirSync(path.join(serverDir, 'logs'), { recursive: true });
 
